@@ -1,0 +1,17 @@
+# build output
+*.o
+*.bin
+*.elf
+*.iso
+
+# toolchain
+*.log
+
+# system
+.DS_Store
+Thumbs.db
+
+# folders build
+/build/
+/bin/
+/out/
