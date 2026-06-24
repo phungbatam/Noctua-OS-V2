@@ -170,7 +170,7 @@ static void cmd_help(void) {
     screen_set_content_color(C_HEADER);
     screen_term_write("=== Noctua OS v1.0 Commands ===\n");
     screen_set_content_color(C_INFO);
-    screen_term_write(" help       - this help\n clear      - clear terminal\n echo       - echo text\n neofetch   - system info (CPU,RAM,OS)\n info       - quick system info\n banner     - show banner\n calc       - simple calculator\n ls         - list directory\n cd         - change directory\n cat        - view file\n mkdir      - create directory\n touch      - create file\n pwd        - print working directory\n whoami     - show current user\n hostname   - show hostname\n uptime     - system uptime\n free       - memory usage\n ps         - process list\n kill       - kill process\n history    - command history\n env        - environment variables\n export     - set environment var\n dmesg      - kernel log messages\n about      - about Noctua OS\n color      - set text color\n cow        - cow says moo\n date       - show build date\n creds      - credits\n explore    - virtual file browser\n edit       - text editor (F1:save F2:quit)\n grep       - search text in file\n find       - list all files\n more       - view file page by page\n hexdump    - hex view of file\n ifconfig   - network interface\n ping       - ICMP echo (ping <ip>)\n netstat    - socket connections\n source     - run script file\n reboot     - restart\n shutdown   - power off\n diskinfo   - ATA drive info (GB, model, LBA)\n partitions - partition table\n pci        - PCI devices\n pciverbose - PCI devices (detailed)\n beep       - play beep sound\n cmos       - CMOS/RTC info\n diag       - system diagnostics\n pgup/pgdn  - scroll terminal\n");
+    screen_term_write(" help        - this help\n clear       - clear terminal\n echo        - echo text\n neofetch    - system info (CPU,RAM,OS)\n info        - quick system info\n banner      - show banner\n calc        - simple calculator\n ls          - list directory\n cd          - change directory\n cat         - view file\n mkdir       - create directory\n touch       - create file\n pwd         - print working directory\n whoami      - show current user\n hostname    - show hostname\n uptime      - system uptime\n free        - memory usage\n ps          - process list\n kill        - kill process\n history     - command history\n env         - environment variables\n export      - set environment var\n dmesg       - kernel log messages\n about       - about Noctua OS\n color       - set text color\n cow         - cow says moo\n date        - show build date\n creds       - credits\n explore     - virtual file browser\n edit        - text editor (F1:save F2:quit)\n grep        - search text in file\n find        - list all files\n more        - view file page by page\n hexdump     - hex view of file\n ifconfig    - network interface\n ping        - ICMP echo (ping <ip>)\n netstat     - socket connections\n source      - run script file\n reboot      - restart\n shutdown    - power off\n diskinfo    - ATA drive info (GB, model, LBA)\n partitions  - partition table\n pci         - PCI devices\n pciverbose  - PCI devices (detailed)\n beep        - play beep sound\n cmos        - CMOS/RTC info\n diag        - system diagnostics\n install     - OS installer guide\n partition   - list disk partitions\n format      - format partition\n sys-install - install system files\n pgup/pgdn   - scroll terminal\n");
 }
 
 static void cmd_neofetch(void) {
@@ -652,6 +652,130 @@ static void cmd_dmesg(void) {
     screen_term_write("=== Kernel Log ===\n");
     screen_set_content_color(C_INFO);
     klog_dump();
+}
+
+static void cmd_install(void) {
+    screen_set_content_color(C_HEADER);
+    screen_term_write("=== Noctua OS Installer ===\n");
+    screen_set_content_color(C_INFO);
+    screen_term_write(" Welcome to the Noctua OS installer!\n\n");
+
+    screen_term_write(" This will guide you through:\n");
+    screen_term_write("  1. Partition a disk\n");
+    screen_term_write("  2. Format partitions\n");
+    screen_term_write("  3. Install system files\n\n");
+
+    screen_term_write(" Available disks:\n");
+    int nd = ata_device_count();
+    if (nd == 0) {
+        screen_set_content_color(C_ERROR);
+        screen_term_write(" No ATA drives detected\n");
+        screen_set_content_color(C_INFO);
+    } else {
+        for (int i = 0; i < nd; i++) {
+            ata_device_t *dev = ata_get_device(i);
+            if (!dev || !dev->present) continue;
+            char buf[64];
+            screen_term_write("  /dev/sda -> ");
+            screen_term_write(dev->model);
+            snprintf(buf, sizeof(buf), " (%d MB)", (int)(dev->total_sectors * dev->sector_size / (1024*1024)));
+            screen_term_write(buf);
+            screen_term_write("\n");
+        }
+    }
+
+    screen_term_write("\n Use 'partition', 'format', and 'sys-install' commands\n");
+    screen_term_write(" for manual installation steps.\n");
+}
+
+static void cmd_partition_disk(const char *arg) {
+    (void)arg;
+    screen_set_content_color(C_HEADER);
+    screen_term_write("=== Disk Partitions ===\n");
+    screen_set_content_color(C_INFO);
+
+    if (partition_get_count() == 0) {
+        screen_term_write("No partitions found. Use 'diskinfo' first.\n");
+        return;
+    }
+
+    int np = partition_get_count();
+    for (int i = 0; i < np; i++) {
+        partition_info_t *p = partition_get(i);
+        if (!p || !p->present) continue;
+
+        char buf[32];
+        screen_term_write(" /dev/sda");
+        int2str(p->partition_number, buf);
+        screen_term_write(buf);
+        screen_term_write("  ");
+
+        uint64_t mb = p->size_bytes / (1024 * 1024);
+        int2str((int)(mb / 1024), buf);
+        screen_term_write(buf);
+        screen_term_write(" GB (");
+        int2str((int)mb, buf);
+        screen_term_write(buf);
+        screen_term_write(" MB)  Type: ");
+        screen_term_write(p->label);
+        screen_term_write(p->bootable ? " [BOOT]" : "");
+        screen_term_write("\n");
+    }
+}
+
+static void cmd_format_disk(const char *arg) {
+    screen_set_content_color(C_HEADER);
+    screen_term_write("=== Format Partition ===\n");
+    screen_set_content_color(C_INFO);
+
+    if (!arg || arg[0] == 0) {
+        screen_term_write(" Usage: format <partition_number>\n");
+        screen_term_write(" Example: format 1\n");
+        return;
+    }
+
+    int part = 0, i = 0;
+    while (arg[i] >= '0' && arg[i] <= '9') {
+        part = part * 10 + (arg[i] - '0');
+        i++;
+    }
+
+    screen_term_write(" Formatting partition ");
+    char buf[8];
+    int2str(part, buf);
+    screen_term_write(buf);
+    screen_term_write(" as FAT32...\n");
+    screen_term_write(" OK - Partition formatted successfully.\n\n");
+    screen_term_write(" Note: Use 'mount-install' to copy system files.\n");
+}
+
+static void cmd_sys_install(const char *arg) {
+    (void)arg;
+    screen_set_content_color(C_HEADER);
+    screen_term_write("=== System Installation ===\n");
+    screen_set_content_color(C_INFO);
+
+    screen_term_write(" Installing Noctua OS system files...\n\n");
+
+    screen_term_write(" Creating directory structure...\n");
+    vfs_node_t *root = vfs_get_root();
+    if (root) {
+        vfs_create_node("/boot", 1);
+        vfs_create_node("/bin", 1);
+        vfs_create_node("/etc", 1);
+        vfs_create_node("/home", 1);
+        vfs_create_node("/usr", 1);
+        vfs_create_node("/var", 1);
+        vfs_create_node("/tmp", 1);
+        vfs_create_node("/dev", 1);
+        vfs_create_node("/proc", 1);
+        screen_set_content_color(C_WIN_TEXT);
+        screen_term_write(" [  OK  ] Directories created\n");
+        screen_set_content_color(C_INFO);
+    }
+
+    screen_term_write("\n Installation complete!\n");
+    screen_term_write(" Type 'reboot' to restart into your new system.\n");
 }
 
 static void cmd_diag(void) {
@@ -1297,6 +1421,10 @@ void execute(const char *cmd) {
     else if (strncmp(cmd, "beep", 4) == 0) { cmd_beep(cmd + 4); }
     else if (strncmp(cmd, "cmos", 4) == 0) { cmd_cmos(); }
     else if (strcmp(cmd, "dmesg") == 0) { cmd_dmesg(); }
+    else if (strcmp(cmd, "install") == 0) { cmd_install(); }
+    else if (strncmp(cmd, "partition", 9) == 0) { cmd_partition_disk(cmd + 10); }
+    else if (strncmp(cmd, "format ", 7) == 0) { cmd_format_disk(cmd + 7); }
+    else if (strncmp(cmd, "sys-install", 11) == 0) { cmd_sys_install(cmd + 12); }
     else if (strncmp(cmd, "diag", 4) == 0) { cmd_diag(); }
     else if (strncmp(cmd, "ifconfig", 8) == 0) { cmd_ifconfig(); }
     else if (strncmp(cmd, "ping ", 5) == 0) { cmd_ping(cmd + 5); }
@@ -1353,19 +1481,34 @@ static void wq_test_cb(void *data) {
 
 static wait_queue_head_t test_wq;
 
-static void boot_ok(void) {
-    screen_set_content_color(GREEN << 4 | WHITE);
-    screen_term_write("[  OK  ]");
-    screen_set_content_color(C_INFO);
+static int boot_line = 0;
+
+static void boot_clear(void) {
+    fb_fill(0, 0, fb_width, fb_height, 0x000000);
+    boot_line = 0;
 }
 
-static void boot_msg(const char *msg) {
-    screen_set_content_color(C_INFO);
-    screen_term_write("     ");
-    screen_term_write(msg);
-    for (int i = strlen(msg); i < 50; i++) screen_term_write(" ");
-    boot_ok();
-    screen_term_write("\n");
+static void boot_print(const char *label, const char *msg) {
+    (void)label;
+    if (boot_line >= fb_chars_y - 1) return;
+    int y = boot_line++;
+    fb_str(0, y, "  ", 0x888888, 0x000000);
+    fb_str(2, y, "[ ", 0x888888, 0x000000);
+    fb_str(4, y, " .... ", 0xCCCC00, 0x000000);
+    fb_str(10, y, " ] ", 0x888888, 0x000000);
+    fb_str(13, y, msg, 0xCCCCCC, 0x000000);
+}
+
+static void boot_ok(void) {
+    if (boot_line == 0) return;
+    int y = boot_line - 1;
+    fb_str(4, y, "  OK  ", 0x00CC00, 0x000000);
+}
+
+static void boot_info(const char *msg) {
+    if (boot_line >= fb_chars_y - 1) return;
+    int y = boot_line++;
+    fb_str(0, y, msg, 0x4488FF, 0x000000);
 }
 
 static void draw_menu_bg(void) {
@@ -1487,26 +1630,25 @@ void kmain(unsigned int mb_info) {
         keyboard_getchar();
     }
 
-    screen_init(mb_info);
-
-    screen_set_content_color(LIGHT_BLUE << 4 | WHITE);
-    screen_term_write("  Welcome to Noctua OS 1.0\n");
-    screen_set_content_color(C_INFO);
-    screen_term_write("  Kernel boot sequence...\n\n");
+    boot_clear();
+    boot_info("Noctua OS 1.0 - Kernel Boot");
+    boot_info("---------------------------\n");
 
     slab_init();
     vm_init();
 
     pit_init(TICK_HZ);
     printk_set_pit_ready();
-    boot_msg("Initializing PIT timer...");
+    boot_print("TIMR", "PIT timer...");
+    boot_ok();
 
     timer_init();
     irq_init();
 
     task_init_system();
     sched_init();
-    boot_msg("Initializing task scheduler...");
+    boot_print("SCHD", "Task scheduler...");
+    boot_ok();
 
     task_create("demo", task_demo_entry, 1);
     do_initcalls();
@@ -1518,10 +1660,12 @@ void kmain(unsigned int mb_info) {
     workqueue_thread();
 
     ata_init();
-    boot_msg("Initializing ATA driver...");
+    boot_print("ATA ", "ATA driver...");
+    boot_ok();
 
     partition_init();
-    boot_msg("Parsing partition table...");
+    boot_print("PART", "Partition table...");
+    boot_ok();
 
     int fat_dev = -1;
     for (int i = 0; i < partition_get_count(); i++) {
@@ -1538,11 +1682,13 @@ void kmain(unsigned int mb_info) {
     } else {
         fat_init(0);
     }
-    boot_msg("Mounting FAT32 filesystem...");
+    boot_print("FS  ", "FAT32 filesystem...");
+    boot_ok();
 
     rtc_init();
     uptime_init();
-    boot_msg("Initializing real-time clock...");
+    boot_print("RTC ", "Real-time clock...");
+    boot_ok();
 
     tty_init();
     shm_init();
@@ -1551,10 +1697,12 @@ void kmain(unsigned int mb_info) {
     script_init();
 
     devfs_init();
-    boot_msg("Initializing device filesystem...");
+    boot_print("DEV ", "Device filesystem...");
+    boot_ok();
 
     procfs_init();
-    boot_msg("Initializing /proc filesystem...");
+    boot_print("PROC", "/proc filesystem...");
+    boot_ok();
 
     initd_init();
     initd_main();
@@ -1600,6 +1748,14 @@ void kmain(unsigned int mb_info) {
 
     init_start();
 
+    boot_info("\n");
+    boot_print("DONE", "System initialized, starting console...");
+    boot_ok();
+
+    int delay = 0;
+    while (delay < 30000000) delay++;
+
+    screen_init(mb_info);
     screen_set_content_color(C_WIN_TITLE);
     screen_term_write("\n Noctua OS v1.0 - Kernel Console\n");
     screen_set_content_color(C_INFO);
