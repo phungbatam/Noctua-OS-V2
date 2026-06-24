@@ -158,6 +158,9 @@ void dentry_add(vfs_node_t *parent, vfs_node_t *child);
 
 /* FAT API (generic for FAT12/16/32) */
 int fat_init(struct block_dev *bdev);
+int fat32_format(struct block_dev *bdev);
+int fat32_mkdir(struct block_dev *bdev, const char *name);
+int fat32_write_file(struct block_dev *bdev, const char *name, const char *content);
 int fat_detect_type(fat_boot_sector_t *bs);
 int fat_read_cluster(uint32_t cluster, void *buffer);
 int fat_write_cluster(uint32_t cluster, const void *buffer);

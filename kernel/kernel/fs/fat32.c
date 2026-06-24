@@ -615,6 +615,352 @@ void dentry_add(vfs_node_t *parent, vfs_node_t *child) {
     dentry_count++;
 }
 
+/* Format a block device as FAT32 */
+int fat32_format(struct block_dev *bdev) {
+    if (!bdev || !bdev->write) return -1;
+
+    uint32_t total_sectors = (uint32_t)bdev->total_sectors;
+    if (total_sectors < 1000) return -1;
+
+    uint16_t bps = 512;
+    uint8_t spc = 1;
+    if (total_sectors > 65536) spc = 8;
+    if (total_sectors > 262144) spc = 16;
+    if (total_sectors > 1048576) spc = 32;
+    if (total_sectors > 4194304) spc = 64;
+
+    uint16_t reserved = 32;
+    uint8_t num_fats = 2;
+
+    uint32_t fat_sectors = (total_sectors + spc * 128 - 1) / (spc * 128);
+    if (fat_sectors < 1) fat_sectors = 1;
+
+    uint32_t data_sectors = total_sectors - reserved - num_fats * fat_sectors;
+    uint32_t clusters = data_sectors / spc;
+
+    while (clusters > 0x0FFFFFF5 && fat_sectors < 10000) {
+        fat_sectors++;
+        data_sectors = total_sectors - reserved - num_fats * fat_sectors;
+        clusters = data_sectors / spc;
+    }
+
+    /* Build boot sector */
+    uint8_t boot[512];
+    memset(boot, 0, 512);
+    fat_boot_sector_t *bs = (fat_boot_sector_t *)boot;
+
+    bs->jmp_boot[0] = 0xEB;
+    bs->jmp_boot[1] = 0x58;
+    bs->jmp_boot[2] = 0x90;
+    memcpy(bs->oem_name, "NOCTUA1.0", 8);
+    bs->bytes_per_sector = bps;
+    bs->sectors_per_cluster = spc;
+    bs->reserved_sectors = reserved;
+    bs->num_fats = num_fats;
+    bs->root_entry_count = 0;
+    bs->total_sectors_16 = 0;
+    bs->media = 0xF8;
+    bs->fat_size_16 = 0;
+    bs->sectors_per_track = 63;
+    bs->num_heads = 255;
+    bs->hidden_sectors = 0;
+    bs->total_sectors_32 = total_sectors;
+    bs->fat_size_32 = fat_sectors;
+    bs->ext_flags = 0;
+    bs->fs_version = 0;
+    bs->root_cluster = 2;
+    bs->fs_info = 1;
+    bs->backup_boot_sector = 6;
+    memset(bs->reserved, 0, 12);
+    bs->drive_number = 0x80;
+    bs->reserved1 = 0;
+    bs->ext_boot_signature = 0x29;
+    bs->volume_id = 0x12345678;
+    memcpy(bs->volume_label, "NOCTUA OS ", 11);
+    memcpy(bs->fs_type, "FAT32   ", 8);
+    /* Signature at offset 510 */
+    boot[510] = 0x55;
+    boot[511] = 0xAA;
+
+    /* Write boot sector */
+    if (bdev->write(bdev->priv, 0, boot, 1) < 0) return -1;
+
+    /* Write FSInfo sector */
+    uint8_t fsinfo[512];
+    memset(fsinfo, 0, 512);
+    *(uint32_t *)(fsinfo + 0)   = 0x41615252;
+    *(uint32_t *)(fsinfo + 484) = 0x61417272;
+    *(uint32_t *)(fsinfo + 488) = 0xFFFFFFFF;
+    *(uint32_t *)(fsinfo + 492) = 0xFFFFFFFF;
+    *(uint32_t *)(fsinfo + 508) = 0xAA550000;
+    if (bdev->write(bdev->priv, 1, fsinfo, 1) < 0) return -1;
+
+    /* Write backup boot sector + backup FSInfo */
+    if (bdev->write(bdev->priv, 6, boot, 1) < 0) return -1;
+    if (bdev->write(bdev->priv, 7, fsinfo, 1) < 0) return -1;
+
+    /* Build and write FAT tables */
+    uint32_t fat_bytes = fat_sectors * 512;
+    uint8_t *fat = (uint8_t *)kmalloc(fat_bytes);
+    if (!fat) return -1;
+    memset(fat, 0, fat_bytes);
+
+    /* Cluster 0: media ID byte */
+    fat[0] = 0xF8;
+    fat[1] = 0xFF;
+    fat[2] = 0xFF;
+    fat[3] = 0x0F;
+    /* Cluster 1: EOC */
+    fat[4] = 0xFF;
+    fat[5] = 0xFF;
+    fat[6] = 0xFF;
+    fat[7] = 0x0F;
+    /* Cluster 2: EOC (root directory) */
+    fat[8]  = 0xFF;
+    fat[9]  = 0xFF;
+    fat[10] = 0xFF;
+    fat[11] = 0x0F;
+
+    /* Write FAT1 */
+    if (bdev->write(bdev->priv, reserved, fat, fat_sectors) < 0) {
+        kfree(fat);
+        return -1;
+    }
+    /* Write FAT2 */
+    if (bdev->write(bdev->priv, reserved + fat_sectors, fat, fat_sectors) < 0) {
+        kfree(fat);
+        return -1;
+    }
+    kfree(fat);
+
+    /* Write root directory cluster (cluster 2) */
+    uint32_t root_lba = reserved + num_fats * fat_sectors + (2 - 2) * spc;
+    uint8_t *root_dir = (uint8_t *)kmalloc(spc * 512);
+    if (!root_dir) return -1;
+    memset(root_dir, 0, spc * 512);
+
+    /* Volume label entry */
+    fat_dir_entry_t *vol = (fat_dir_entry_t *)root_dir;
+    memcpy(vol->name, "NOCTUA OS ", 11);
+    vol->attributes = FAT_ATTR_VOLUME_ID;
+    vol->write_date = 0x4A85;
+    vol->write_time = 0x0000;
+
+    if (bdev->write(bdev->priv, root_lba, root_dir, spc) < 0) {
+        kfree(root_dir);
+        return -1;
+    }
+    kfree(root_dir);
+
+    return 0;
+}
+
+/* Read boot sector and extract FAT32 geometry */
+static int fat32_read_geo(struct block_dev *bdev, uint32_t *reserved,
+                          uint32_t *fat_sectors, uint8_t *spc,
+                          uint8_t *num_fats, uint32_t *root_cluster) {
+    uint8_t buf[512];
+    if (bdev->read(bdev->priv, 0, buf, 1) < 0) return -1;
+    fat_boot_sector_t *bs = (fat_boot_sector_t *)buf;
+    if (bs->bytes_per_sector != 512) return -1;
+    *reserved = bs->reserved_sectors;
+    *fat_sectors = bs->fat_size_32;
+    *spc = bs->sectors_per_cluster;
+    *num_fats = bs->num_fats;
+    *root_cluster = bs->root_cluster;
+    return 0;
+}
+
+/* Allocate a free cluster, read-modify-write FAT table */
+static int fat32_alloc_cluster(struct block_dev *bdev, uint32_t reserved,
+                                uint32_t fat_sectors, uint32_t *new_cluster) {
+    uint32_t fat_bytes = fat_sectors * 512;
+    uint8_t *fat = (uint8_t *)kmalloc(fat_bytes);
+    if (!fat) return -1;
+    if (bdev->read(bdev->priv, reserved, fat, fat_sectors) < 0) {
+        kfree(fat); return -1;
+    }
+    uint32_t num_entries = fat_bytes / 4;
+    *new_cluster = 0;
+    for (uint32_t i = 2; i < num_entries; i++) {
+        if (((uint32_t *)fat)[i] == 0) {
+            *new_cluster = i;
+            break;
+        }
+    }
+    if (*new_cluster == 0) { kfree(fat); return -1; }
+    ((uint32_t *)fat)[*new_cluster] = 0x0FFFFFFF; /* EOC */
+    if (bdev->write(bdev->priv, reserved, fat, fat_sectors) < 0) {
+        kfree(fat); return -1;
+    }
+    if (bdev->write(bdev->priv, reserved + fat_sectors, fat, fat_sectors) < 0) {
+        kfree(fat); return -1;
+    }
+    kfree(fat);
+    return 0;
+}
+
+/* Add a directory entry into a parent cluster */
+static int fat32_add_entry(struct block_dev *bdev, uint32_t parent_lba,
+                            uint8_t spc, const char *name, uint8_t attr,
+                            uint32_t first_cluster, uint32_t file_size) {
+    uint32_t clus_bytes = spc * 512;
+    uint8_t *data = (uint8_t *)kmalloc(clus_bytes);
+    if (!data) return -1;
+    if (bdev->read(bdev->priv, parent_lba, data, spc) < 0) {
+        kfree(data); return -1;
+    }
+    fat_dir_entry_t *entry = 0;
+    int max_entries = clus_bytes / 32;
+    for (int i = 0; i < max_entries; i++) {
+        fat_dir_entry_t *e = (fat_dir_entry_t *)data + i;
+        if (e->name[0] == 0 || e->name[0] == 0xE5) { entry = e; break; }
+    }
+    if (!entry) { kfree(data); return -1; }
+    memset(entry, 0, sizeof(fat_dir_entry_t));
+    memset(entry->name, ' ', 11);
+    int j;
+    for (j = 0; name[j] && j < 8; j++) entry->name[j] = name[j];
+    entry->attributes = attr;
+    entry->first_cluster_low = first_cluster & 0xFFFF;
+    entry->first_cluster_high = (first_cluster >> 16) & 0xFFFF;
+    entry->write_date = 0x4A85;
+    entry->write_time = 0x0000;
+    entry->file_size = file_size;
+    if (bdev->write(bdev->priv, parent_lba, data, spc) < 0) {
+        kfree(data); return -1;
+    }
+    kfree(data);
+    return 0;
+}
+
+/* Create a directory on a formatted FAT32 partition */
+int fat32_mkdir(struct block_dev *bdev, const char *name) {
+    if (!bdev || !name || !name[0]) return -1;
+    uint32_t reserved, fat_secs, root_cluster;
+    uint8_t spc, num_fats;
+    if (fat32_read_geo(bdev, &reserved, &fat_secs, &spc, &num_fats, &root_cluster) < 0)
+        return -1;
+
+    uint32_t new_cluster;
+    if (fat32_alloc_cluster(bdev, reserved, fat_secs, &new_cluster) < 0)
+        return -1;
+
+    /* Write "." and ".." entries in the new directory */
+    uint32_t clus_bytes = spc * 512;
+    uint8_t *data = (uint8_t *)kmalloc(clus_bytes);
+    if (!data) return -1;
+    memset(data, 0, clus_bytes);
+
+    fat_dir_entry_t *dot = (fat_dir_entry_t *)data;
+    memset(dot->name, ' ', 11);
+    dot->name[0] = '.';
+    dot->attributes = FAT_ATTR_DIRECTORY;
+    dot->first_cluster_low = new_cluster & 0xFFFF;
+    dot->first_cluster_high = (new_cluster >> 16) & 0xFFFF;
+    dot->write_date = 0x4A85;
+
+    fat_dir_entry_t *dotdot = (fat_dir_entry_t *)(data + 32);
+    memset(dotdot->name, ' ', 11);
+    dotdot->name[0] = '.';
+    dotdot->name[1] = '.';
+    dotdot->attributes = FAT_ATTR_DIRECTORY;
+    dotdot->first_cluster_low = root_cluster & 0xFFFF;
+    dotdot->first_cluster_high = (root_cluster >> 16) & 0xFFFF;
+    dotdot->write_date = 0x4A85;
+
+    uint32_t data_start = reserved + num_fats * fat_secs;
+    uint32_t new_lba = data_start + (new_cluster - 2) * spc;
+    if (bdev->write(bdev->priv, new_lba, data, spc) < 0) {
+        kfree(data); return -1;
+    }
+    kfree(data);
+
+    /* Add entry in root directory */
+    uint32_t root_lba = data_start + (root_cluster - 2) * spc;
+    if (fat32_add_entry(bdev, root_lba, spc, name, FAT_ATTR_DIRECTORY, new_cluster, 0) < 0)
+        return -1;
+
+    return 0;
+}
+
+/* Write a text file to the root directory of a formatted FAT32 partition */
+int fat32_write_file(struct block_dev *bdev, const char *name, const char *content) {
+    if (!bdev || !name || !name[0]) return -1;
+    uint32_t reserved, fat_secs, root_cluster;
+    uint8_t spc, num_fats;
+    if (fat32_read_geo(bdev, &reserved, &fat_secs, &spc, &num_fats, &root_cluster) < 0)
+        return -1;
+
+    uint32_t clus_bytes = spc * 512;
+    uint32_t len = strlen(content);
+    uint32_t clusters_needed = (len + clus_bytes - 1) / clus_bytes;
+    if (clusters_needed < 1) clusters_needed = 1;
+
+    /* Allocate cluster chain */
+    uint32_t fat_bytes = fat_secs * 512;
+    uint8_t *fat = (uint8_t *)kmalloc(fat_bytes);
+    if (!fat) return -1;
+    if (bdev->read(bdev->priv, reserved, fat, fat_secs) < 0) {
+        kfree(fat); return -1;
+    }
+
+    uint32_t first_cluster = 0;
+    uint32_t prev = 0;
+    uint32_t num_entries = fat_bytes / 4;
+    for (uint32_t c = 0; c < clusters_needed; c++) {
+        uint32_t nc = 0;
+        for (uint32_t i = 2; i < num_entries; i++) {
+            if (((uint32_t *)fat)[i] == 0) { nc = i; break; }
+        }
+        if (nc == 0) { kfree(fat); return -1; }
+        if (c == 0) first_cluster = nc;
+        if (prev) ((uint32_t *)fat)[prev] = nc;
+        prev = nc;
+    }
+    if (prev) ((uint32_t *)fat)[prev] = 0x0FFFFFFF;
+
+    if (bdev->write(bdev->priv, reserved, fat, fat_secs) < 0) {
+        kfree(fat); return -1;
+    }
+    if (bdev->write(bdev->priv, reserved + fat_secs, fat, fat_secs) < 0) {
+        kfree(fat); return -1;
+    }
+    kfree(fat);
+
+    /* Write content to clusters */
+    uint32_t data_start = reserved + num_fats * fat_secs;
+    uint32_t cluster = first_cluster;
+    uint32_t offset = 0;
+    while (cluster < 0x0FFFFFF8 && offset < len) {
+        uint32_t lba = data_start + (cluster - 2) * spc;
+        uint32_t chunk = len - offset;
+        if (chunk > clus_bytes) chunk = clus_bytes;
+        uint8_t *buf = (uint8_t *)kmalloc(clus_bytes);
+        if (!buf) return -1;
+        memset(buf, 0, clus_bytes);
+        memcpy(buf, content + offset, chunk);
+        if (bdev->write(bdev->priv, lba, buf, spc) < 0) {
+            kfree(buf); return -1;
+        }
+        kfree(buf);
+        offset += chunk;
+        /* Read next cluster from FAT */
+        uint8_t *fat2 = (uint8_t *)kmalloc(fat_bytes);
+        if (!fat2) return -1;
+        bdev->read(bdev->priv, reserved, fat2, fat_secs);
+        cluster = ((uint32_t *)fat2)[cluster];
+        kfree(fat2);
+    }
+
+    /* Add entry in root directory */
+    uint32_t root_lba = data_start + (root_cluster - 2) * spc;
+    if (fat32_add_entry(bdev, root_lba, spc, name, FAT_ATTR_ARCHIVE, first_cluster, len) < 0)
+        return -1;
+
+    return 0;
+}
+
 /* Gán vtable operations cho node */
 void vfs_setup_operations(vfs_node_t *node) {
     if (!node) return;

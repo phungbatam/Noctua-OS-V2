@@ -142,6 +142,7 @@ int partition_init(void) {
 
     int nd = ata_device_count();
     for (int d = 0; d < nd; d++) {
+        int current_drive = d;
         ata_device_t *dev = ata_get_device(d);
         if (!dev || !dev->present) continue;
 
@@ -157,6 +158,7 @@ int partition_init(void) {
                 partition_info_t *p = &partition_list[partition_count];
                 p->present = 1;
                 p->index = partition_count;
+                p->drive_id = current_drive;
                 p->is_gpt = 1;
                 p->partition_number = i + 1;
                 p->lba_start = table.gpt_entries[i].starting_lba;
@@ -176,6 +178,7 @@ int partition_init(void) {
                 partition_info_t *p = &partition_list[partition_count];
                 p->present = 1;
                 p->index = partition_count;
+                p->drive_id = current_drive;
                 p->is_gpt = 0;
                 p->partition_number = i + 1;
                 p->type = e->type;
@@ -214,6 +217,7 @@ int partition_init(void) {
                             partition_info_t *lp = &partition_list[partition_count];
                             lp->present = 1;
                             lp->index = partition_count;
+                            lp->drive_id = current_drive;
                             lp->is_gpt = 0;
                             lp->partition_number = i + 1 + log + 1;
                             lp->type = ebr->partitions[0].type;

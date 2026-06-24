@@ -351,7 +351,7 @@ run: iso
 
 run-hdd: iso hdd.img
 	qemu-system-i386 \
-		-hda hdd.img \
+		-drive file=hdd.img,format=raw \
 		-cdrom noctua.iso \
 		-cpu max \
 		-device piix3-usb-uhci \
@@ -361,7 +361,17 @@ run-serial: iso
 	qemu-system-i386 -cdrom noctua.iso -serial stdio
 
 run-serial-hdd: iso hdd.img
-	qemu-system-i386 -hda hdd.img -cdrom noctua.iso -serial stdio
+	qemu-system-i386 -drive file=hdd.img,format=raw -cdrom noctua.iso -serial stdio -device isa-debug-exit,iobase=0xF4
+
+run-hdd-serial: iso hdd.img
+	qemu-system-i386 \
+		-drive file=hdd.img,format=raw,id=hd \
+		-drive file=noctua.iso,format=raw,id=cd,media=cdrom \
+		-cpu max \
+		-device piix3-usb-uhci \
+		-device usb-tablet \
+		-serial stdio \
+		-device isa-debug-exit,iobase=0xF4
 
 run-kernel: $(BUILD)/noctua.bin
 	qemu-system-i386 -kernel $(BUILD)/noctua.bin

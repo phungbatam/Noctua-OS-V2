@@ -740,42 +740,159 @@ static void cmd_format_disk(const char *arg) {
         i++;
     }
 
-    screen_term_write(" Formatting partition ");
+    if (partition_get_count() == 0) {
+        screen_term_write(" No partitions found. Use 'diskinfo' first.\n");
+        return;
+    }
+
+    int pidx = -1;
+    for (int p = 0; p < partition_get_count(); p++) {
+        partition_info_t *pi = partition_get(p);
+        if (pi && pi->present && pi->partition_number == part) {
+            pidx = p;
+            break;
+        }
+    }
+
+    if (pidx < 0) {
+        screen_term_write(" Partition ");
+        char buf[8]; int2str(part, buf);
+        screen_term_write(buf);
+        screen_term_write(" not found. Use 'partition' to list.\n");
+        return;
+    }
+
+    partition_info_t *pi = partition_get(pidx);
     char buf[8];
+
+    screen_term_write(" Formatting partition ");
     int2str(part, buf);
     screen_term_write(buf);
-    screen_term_write(" as FAT32...\n");
-    screen_term_write(" OK - Partition formatted successfully.\n\n");
-    screen_term_write(" Note: Use 'mount-install' to copy system files.\n");
+    screen_term_write(" (");
+    int2str((int)(pi->size_bytes / (1024 * 1024)), buf);
+    screen_term_write(buf);
+    screen_term_write(" MB) as FAT32...\n");
+
+    int bd = blockdev_register(pi->drive_id, pi->lba_start, pi->sector_count);
+    if (bd < 0) {
+        screen_term_write(" FAILED: Could not register block device.\n");
+        return;
+    }
+
+    block_dev_t *bdev = blockdev_get(bd);
+    if (!bdev) {
+        screen_term_write(" FAILED: Block device error.\n");
+        return;
+    }
+
+    if (fat32_format(bdev) < 0) {
+        screen_term_write(" FAILED: Format error.\n");
+        return;
+    }
+
+    screen_set_content_color(C_WIN_TEXT);
+    screen_term_write(" [  OK  ] Partition formatted successfully.\n\n");
+    screen_set_content_color(C_INFO);
+    screen_term_write(" Use 'sys-install' to install system files.\n");
 }
 
 static void cmd_sys_install(const char *arg) {
-    (void)arg;
     screen_set_content_color(C_HEADER);
     screen_term_write("=== System Installation ===\n");
     screen_set_content_color(C_INFO);
 
-    screen_term_write(" Installing Noctua OS system files...\n\n");
-
-    screen_term_write(" Creating directory structure...\n");
-    vfs_node_t *root = vfs_get_root();
-    if (root) {
-        vfs_create_node("/boot", 1);
-        vfs_create_node("/bin", 1);
-        vfs_create_node("/etc", 1);
-        vfs_create_node("/home", 1);
-        vfs_create_node("/usr", 1);
-        vfs_create_node("/var", 1);
-        vfs_create_node("/tmp", 1);
-        vfs_create_node("/dev", 1);
-        vfs_create_node("/proc", 1);
-        screen_set_content_color(C_WIN_TEXT);
-        screen_term_write(" [  OK  ] Directories created\n");
-        screen_set_content_color(C_INFO);
+    int part = 1;
+    if (arg && arg[0]) {
+        part = 0; int i = 0;
+        while (arg[i] >= '0' && arg[i] <= '9') {
+            part = part * 10 + (arg[i] - '0');
+            i++;
+        }
     }
 
-    screen_term_write("\n Installation complete!\n");
-    screen_term_write(" Type 'reboot' to restart into your new system.\n");
+    if (partition_get_count() == 0) {
+        screen_term_write(" No partitions found. Use 'diskinfo' first.\n");
+        return;
+    }
+
+    int pidx = -1;
+    for (int p = 0; p < partition_get_count(); p++) {
+        partition_info_t *pi = partition_get(p);
+        if (pi && pi->present && pi->partition_number == part) {
+            pidx = p; break;
+        }
+    }
+    if (pidx < 0) {
+        screen_term_write(" Partition ");
+        char buf[8]; int2str(part, buf);
+        screen_term_write(buf);
+        screen_term_write(" not found.\n");
+        return;
+    }
+
+    partition_info_t *pi = partition_get(pidx);
+    char buf[8];
+    screen_term_write(" Installing to partition ");
+    int2str(part, buf);
+    screen_term_write(buf);
+    screen_term_write(" (");
+    int2str((int)(pi->size_bytes / (1024 * 1024)), buf);
+    screen_term_write(buf);
+    screen_term_write(" MB)...\n\n");
+
+    /* Register block device for the partition */
+    int bd = blockdev_register(pi->drive_id, pi->lba_start, pi->sector_count);
+    if (bd < 0) {
+        screen_term_write(" FAILED: Could not access partition.\n");
+        return;
+    }
+    block_dev_t *bdev = blockdev_get(bd);
+    if (!bdev) {
+        screen_term_write(" FAILED: Block device error.\n");
+        return;
+    }
+
+    /* Ensure partition is formatted */
+    uint8_t test_buf[512];
+    if (bdev->read(bdev->priv, 0, test_buf, 1) < 0) {
+        screen_term_write(" FAILED: Cannot read partition.\n");
+        return;
+    }
+    uint16_t *sig = (uint16_t *)(test_buf + 510);
+    if (*sig != 0xAA55) {
+        screen_term_write(" Partition not formatted. Run 'format ");
+        int2str(part, buf);
+        screen_term_write(buf);
+        screen_term_write("' first.\n");
+        return;
+    }
+
+    screen_term_write(" Creating directories...\n");
+    const char *dirs[] = {"boot", "bin", "etc", "home", "usr", "var", "tmp", "dev", "proc", 0};
+    for (int i = 0; dirs[i]; i++) {
+        if (fat32_mkdir(bdev, dirs[i]) < 0) {
+            screen_term_write("  FAILED: ");
+            screen_term_write(dirs[i]);
+            screen_term_write("\n");
+        } else {
+            screen_term_write("  /");
+            screen_term_write(dirs[i]);
+            screen_term_write("\n");
+        }
+    }
+
+    screen_term_write("\n Writing system files...\n");
+    fat32_write_file(bdev, "VERSION", "Noctua OS v1.0\n");
+    screen_term_write("  /VERSION\n");
+    fat32_write_file(bdev, "README.TXT", "Chao mung ban den voi Noctua OS!\n");
+    screen_term_write("  /README.TXT\n");
+    fat32_write_file(bdev, "hostname", "noctua\n");
+    screen_term_write("  /etc/hostname\n");
+
+    screen_set_content_color(C_WIN_TEXT);
+    screen_term_write("\n [  OK  ] Installation complete!\n");
+    screen_set_content_color(C_INFO);
+    screen_term_write(" Reboot to use the new system.\n");
 }
 
 static void cmd_diag(void) {

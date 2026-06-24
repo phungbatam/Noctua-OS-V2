@@ -86,6 +86,7 @@ typedef struct {
 typedef struct {
     int present;
     int index;
+    int drive_id;       /* ATA drive index */
     uint8_t type;
     uint8_t bootable;
     uint64_t lba_start;
