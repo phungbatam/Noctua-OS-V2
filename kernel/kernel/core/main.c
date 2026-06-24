@@ -15,6 +15,7 @@
 #include "core/completion.h"
 #include "core/idr.h"
 #include "syscall.h"
+#include "core/commands.h"
 
 /* ============================================
    Architecture (x86)
@@ -1563,11 +1564,12 @@ void execute(const char *cmd) {
         }
     }
     else if (cmd[0] == 0) { }
+    else if (cmd_dispatch(cmd) == 0) { }
     else {
         screen_set_content_color(C_ERROR);
         screen_term_write(" Unknown: ");
         screen_term_write(cmd);
-        screen_term_write(" ('help')\n");
+        screen_term_write(" ('noctua-help' for all)\n");
     }
 }
 

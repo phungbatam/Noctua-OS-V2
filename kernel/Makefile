@@ -87,8 +87,9 @@ OBJS = $(BUILD)/boot.o             \
        $(BUILD)/udp.o              \
        $(BUILD)/tcp.o              \
        $(BUILD)/socket.o           \
-       $(BUILD)/shm.o              \
-       $(BUILD)/msg.o
+        $(BUILD)/shm.o              \
+        $(BUILD)/msg.o              \
+        $(BUILD)/commands.o
 
 all: $(BUILD)/noctua.bin
 
@@ -146,6 +147,9 @@ $(BUILD)/devices.o: kernel/core/devices.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/procfs.o: kernel/core/procfs.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/commands.o: kernel/core/commands.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Lib
