@@ -4,6 +4,7 @@
 #include "page.h"
 #include "rtc.h"
 #include "cpuid.h"
+#include "serial.h"
 
 extern const unsigned char font8x16[][16];
 
@@ -235,6 +236,7 @@ int screen_get_term_y(void) { return term_row; }
 void screen_set_term_pos(int x, int y) { term_col = x; term_row = y; }
 
 void screen_term_putchar(char c) {
+    serial_write_char(COM1_PORT, c);
     if (c == '\n') {
         flush_line_to_buf();
         term_col = CONTENT_X;

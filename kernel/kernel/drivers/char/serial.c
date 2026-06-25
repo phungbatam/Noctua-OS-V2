@@ -32,6 +32,11 @@ char serial_read_char(uint16_t port) {
     return inb(port + SERIAL_DATA_REG);
 }
 
+char serial_read_char_nb(uint16_t port) {
+    if (!serial_received(port)) return 0;
+    return inb(port + SERIAL_DATA_REG);
+}
+
 void serial_write_char(uint16_t port, char c) {
     while (!(inb(port + SERIAL_LINE_STATUS) & SERIAL_LSR_THR_EMPTY));
     outb(port + SERIAL_DATA_REG, c);

@@ -9,7 +9,7 @@
 
 /* /dev/null - discards all writes, returns 0 on read */
 static int dev_null_read(struct vfs_node *node, uint32_t offset, uint32_t size, void *buffer) {
-    (void)node; (void)offset; (void)buffer;
+    (void)node; (void)offset; (void)size; (void)buffer;
     return 0;
 }
 

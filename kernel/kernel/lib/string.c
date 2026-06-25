@@ -50,6 +50,25 @@ void int2str(int num, char *buf) {
     buf[j] = 0;
 }
 
+void int2str_hex(uint32_t num, char *buf) {
+    const char *hex = "0123456789ABCDEF";
+    int i = 0;
+    int leading = 1;
+    if (num == 0) {
+        buf[0] = '0';
+        buf[1] = 0;
+        return;
+    }
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        uint8_t digit = (num >> shift) & 0xF;
+        if (digit != 0 || !leading || shift == 0) {
+            leading = 0;
+            buf[i++] = hex[digit];
+        }
+    }
+    buf[i] = 0;
+}
+
 char *strcpy(char *dest, const char *src) {
     char *d = dest;
     while ((*d = *src) != '\0') { d++; src++; }

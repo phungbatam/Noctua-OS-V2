@@ -12,6 +12,8 @@
 #include "core/elf.h"
 #include "ipc/shm.h"
 #include "ipc/msg.h"
+#include "core/auth.h"
+#include "core/debug_con.h"
 
 /* Forward declarations from proc/task.c */
 extern int task_fork(void);
@@ -191,6 +193,18 @@ void syscall_handler(struct registers *r) {
     case SYS_RMDIR:    r->eax = (uint32_t)sys_rmdir((const char *)a);   break;
     case SYS_UNAME:    r->eax = (uint32_t)sys_uname((void *)a);         break;
     case SYS_UNLINK:   r->eax = (uint32_t)sys_unlink((const char *)a);  break;
+    case SYS_AUTH_LOGIN: r->eax = (uint32_t)sys_auth_login((const char *)a, (const char *)b); break;
+    case SYS_GETUID:   r->eax = sys_getuid();                           break;
+    case SYS_GETGID:   r->eax = sys_getgid();                           break;
+    case SYS_GETEUID:  r->eax = sys_geteuid();                          break;
+    case SYS_GETEGID:  r->eax = sys_getegid();                          break;
+    case SYS_GETUSERNAME: r->eax = (uint32_t)sys_getusername((char *)a, b); break;
+    case SYS_USERADD:  r->eax = (uint32_t)sys_useradd((const char *)a, (const char *)b, c, 0); break;
+    case SYS_USERDEL:  r->eax = (uint32_t)sys_userdel((const char *)a); break;
+    case SYS_SETPASSWD: r->eax = (uint32_t)sys_setpasswd((const char *)a, (const char *)b); break;
+    case SYS_GETPASSWD: r->eax = (uint32_t)sys_getpasswd((const char *)a, (char *)b, c); break;
+    case SYS_USERCOUNT: r->eax = (uint32_t)sys_usercount();             break;
+    case SYS_DEBUG_CON: sys_debug_con(); r->eax = 0;                    break;
     default:          r->eax = 0xFFFFFFFF;                              break;
     }
 }
@@ -746,4 +760,61 @@ int sys_uname(void *buf) {
 int sys_unlink(const char *path) {
     if (!path) return -1;
     return vfs_delete_node(path);
+}
+
+int sys_auth_login(const char *user, const char *pass) {
+    return auth_login(user, pass);
+}
+
+uint32_t sys_getuid(void) {
+    return auth_get_uid();
+}
+
+uint32_t sys_getgid(void) {
+    return auth_get_gid();
+}
+
+uint32_t sys_geteuid(void) {
+    return auth_get_euid();
+}
+
+uint32_t sys_getegid(void) {
+    return auth_get_egid();
+}
+
+int sys_getusername(char *buf, uint32_t size) {
+    if (!buf || size == 0) return -1;
+    const char *name = auth_get_username();
+    strncpy(buf, name, size - 1);
+    buf[size - 1] = 0;
+    return 0;
+}
+
+int sys_useradd(const char *name, const char *pass, uint32_t uid, uint32_t gid) {
+    return user_add(name, pass, uid, gid);
+}
+
+int sys_userdel(const char *name) {
+    return user_del(name);
+}
+
+int sys_setpasswd(const char *name, const char *newpass) {
+    return user_set_password(name, newpass);
+}
+
+int sys_getpasswd(const char *name, char *buf, uint32_t size) {
+    if (!name || !buf || size == 0) return -1;
+    user_t *u = user_find(name);
+    if (!u) return -1;
+    strncpy(buf, u->pass_hash, size - 1);
+    buf[size - 1] = 0;
+    return 0;
+}
+
+int sys_usercount(void) {
+    return user_count();
+}
+
+void sys_debug_con(void) {
+    debug_con_enter();
 }

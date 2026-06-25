@@ -46,6 +46,12 @@
 #include "proc/pid.h"
 
 /* ============================================
+   Authentication & Debug Console
+   ============================================ */
+#include "core/auth.h"
+#include "core/debug_con.h"
+
+/* ============================================
    UI / Display
    ============================================ */
 #include "screen.h"
@@ -61,6 +67,7 @@
    ============================================ */
 #include "keyboard.h"
 #include "mouse.h"
+#include "serial.h"
 
 /* ============================================
    Filesystem
@@ -129,7 +136,7 @@
 
 /* Commands from editor.c */
 void cmd_grep(const char *arg);
-void cmd_find(const char *arg);
+void editor_find(const char *arg);
 void cmd_more(const char *arg);
 void cmd_hexdump(const char *arg);
 
@@ -1529,7 +1536,7 @@ void execute(const char *cmd) {
     else if (strncmp(cmd, "explore", 7) == 0) { cmd_explore(); }
     else if (strncmp(cmd, "edit ", 5) == 0) { editor_open(cmd + 5); }
     else if (strncmp(cmd, "grep ", 5) == 0) { cmd_grep(cmd + 5); }
-    else if (strncmp(cmd, "find", 4) == 0 && (cmd[4] == 0 || cmd[4] == ' ')) { cmd_find(cmd + 4); }
+    else if (strncmp(cmd, "find", 4) == 0 && (cmd[4] == 0 || cmd[4] == ' ')) { editor_find(cmd + 4); }
     else if (strncmp(cmd, "more ", 5) == 0) { cmd_more(cmd + 5); }
     else if (strncmp(cmd, "hexdump ", 8) == 0) { cmd_hexdump(cmd + 8); }
     else if (strncmp(cmd, "diskinfo", 8) == 0) { cmd_diskinfo(); }
@@ -1638,6 +1645,10 @@ static void draw_menu_bg(void) {
                 draw_char_at(x, y, ' ', (x < 1 || x >= fb_chars_x - 1) ? (DARK_GREY << 4 | DARK_GREY) : (BLUE << 4 | BLUE));
 }
 
+/* Forward declarations for serial input helper */
+static int input_getchar_nb(void);
+static int input_getchar(void);
+
 static int show_boot_menu(void) {
     draw_menu_bg();
 
@@ -1682,7 +1693,7 @@ static int show_boot_menu(void) {
         }
         fb_str(cx - 20, 19, "  Use Up/Down or 1-4 to select, Enter to confirm  ", text_fg, bg);
 
-        int k = keyboard_getchar();
+        int k = input_getchar();
         if (k == K_UP && sel > 0) sel--;
         if (k == K_DOWN && sel < 3) sel++;
         if (k == '1') sel = 0;
@@ -1703,6 +1714,84 @@ static int show_boot_menu(void) {
     fb_str(cx - 8, 22, "Starting...", 0xFFFF44, bg);
 
     return sel;
+}
+
+/* Serial input escape sequence parser */
+static int serial_esc_state = 0;
+static int serial_esc_param = 0;
+
+static int input_getchar_nb(void) {
+    int k = keyboard_getchar_nb();
+    if (k != 0) {
+        serial_esc_state = 0;
+        serial_esc_param = 0;
+        return k;
+    }
+
+    char c = serial_read_char_nb(COM1_PORT);
+    if (c == 0) return 0;
+
+    if (serial_esc_state == 0) {
+        if (c == '\x1b') { serial_esc_state = 1; return 0; }
+        if (c == '\r') return '\n';
+        if (c == '\x7f') return '\b';
+        return c;
+    }
+
+    if (serial_esc_state == 1) {
+        if (c == '[') { serial_esc_state = 2; return 0; }
+        if (c == 'O') { serial_esc_state = 3; return 0; }
+        serial_esc_state = 0;
+        return 0;
+    }
+
+    if (serial_esc_state == 2) {
+        if (c >= '0' && c <= '9') {
+            serial_esc_param = serial_esc_param * 10 + (c - '0');
+            return 0;
+        }
+        if (c == ';') { return 0; }
+        serial_esc_state = 0;
+        if (c == '~') {
+            int key = 0;
+            switch (serial_esc_param) {
+                case 2: key = K_INS; break;
+                case 3: key = K_DEL; break;
+                case 5: key = K_PGUP; break;
+                case 6: key = K_PGDN; break;
+            }
+            serial_esc_param = 0;
+            return key;
+        }
+        serial_esc_param = 0;
+        switch (c) {
+            case 'A': return K_UP;
+            case 'B': return K_DOWN;
+            case 'C': return K_RIGHT;
+            case 'D': return K_LEFT;
+            case 'H': return K_HOME;
+            case 'F': return K_END;
+        }
+        return 0;
+    }
+
+    if (serial_esc_state == 3) {
+        serial_esc_state = 0;
+        switch (c) {
+            case 'H': return K_HOME;
+            case 'F': return K_END;
+        }
+        return 0;
+    }
+
+    return 0;
+}
+
+static int input_getchar(void) {
+    for (;;) {
+        int k = input_getchar_nb();
+        if (k != 0) return k;
+    }
 }
 
 void kmain(unsigned int mb_info) {
@@ -1736,7 +1825,7 @@ void kmain(unsigned int mb_info) {
         screen_term_write("=== Kernel Log ===\n");
         klog_dump();
         screen_term_write("\nPress any key to continue...\n");
-        keyboard_getchar();
+        input_getchar();
     }
 
     if (menu_sel == 1) {
@@ -1746,7 +1835,7 @@ void kmain(unsigned int mb_info) {
         screen_term_write("Kernel: Noctua Kernel (monolithic)\n");
         screen_term_write("Display: Framebuffer\n\n");
         screen_term_write("Press any key to boot...\n");
-        keyboard_getchar();
+        input_getchar();
     }
 
     boot_clear();
@@ -1771,6 +1860,9 @@ void kmain(unsigned int mb_info) {
 
     task_create("demo", task_demo_entry, 1);
     do_initcalls();
+    cmd_linux_init();
+    cmd_noctua_init();
+    cmd_dev_init();
     init_waitqueue_head(&test_wq);
     INIT_LIST_HEAD(&system_wq.head);
     system_wq.running = 1;
@@ -1814,6 +1906,11 @@ void kmain(unsigned int mb_info) {
     msg_init();
     bcache_init();
     script_init();
+
+    auth_init();
+    debug_con_init();
+    boot_print("AUTH", "Authentication system...");
+    boot_ok();
 
     devfs_init();
     boot_print("DEV ", "Device filesystem...");
@@ -1915,7 +2012,7 @@ void kmain(unsigned int mb_info) {
             screen_set_term_pos(prompt_x + cursor, prompt_y);
         }
 
-        int k = keyboard_getchar_nb();
+        int k = input_getchar_nb();
         if (k == 0) continue;
 
         if (k == K_PGUP) {
@@ -1935,6 +2032,20 @@ void kmain(unsigned int mb_info) {
 
         if (k == K_CTRL_C) {
             signal_send(task_current(), SIGINT);
+            continue;
+        }
+
+        if (k == K_F12) {
+            debug_con_enter();
+            screen_draw_header();
+            screen_set_content_color(C_PROMPT);
+            screen_term_write(prompt_line);
+            screen_set_content_color(C_INPUT);
+            prompt_x = screen_get_term_x();
+            prompt_y = screen_get_term_y();
+            len = 0;
+            cursor = 0;
+            buf[0] = 0;
             continue;
         }
 

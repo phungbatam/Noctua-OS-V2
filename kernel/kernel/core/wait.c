@@ -5,6 +5,7 @@ void add_wait_queue(wait_queue_head_t *wq, wait_queue_entry_t *wq_entry) {
 }
 
 void remove_wait_queue(wait_queue_head_t *wq, wait_queue_entry_t *wq_entry) {
+    (void)wq;
     list_del(&wq_entry->entry);
     INIT_LIST_HEAD(&wq_entry->entry);
 }

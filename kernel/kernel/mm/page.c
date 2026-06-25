@@ -118,7 +118,7 @@ void *pmem_alloc_pages(int order) {
 
         /* Mark pages as used in bitmap */
         uint32_t page_idx = (uint32_t)page / PAGE_SIZE;
-        for (uint32_t i = 0; i < (1 << order); i++) {
+        for (uint32_t i = 0; i < (uint32_t)(1 << order); i++) {
             uint32_t idx = (page_idx + i) / BITS_PER_WORD;
             uint32_t bit = (page_idx + i) % BITS_PER_WORD;
             page_bitmap[idx] |= (1 << bit);
@@ -141,7 +141,7 @@ void *pmem_alloc_pages(int order) {
 
             /* Mark the block as used in bitmap */
             uint32_t block_idx = (uint32_t)block / PAGE_SIZE;
-            for (uint32_t i = 0; i < (1 << current_order); i++) {
+            for (uint32_t i = 0; i < (uint32_t)(1 << current_order); i++) {
                 uint32_t idx = (block_idx + i) / BITS_PER_WORD;
                 uint32_t bit = (block_idx + i) % BITS_PER_WORD;
                 page_bitmap[idx] |= (1 << bit);
@@ -154,7 +154,7 @@ void *pmem_alloc_pages(int order) {
 
                 /* Mark buddy as free in bitmap (it will go to free list) */
                 uint32_t buddy_idx = (uint32_t)buddy / PAGE_SIZE;
-                for (uint32_t i = 0; i < (1 << split_order); i++) {
+                for (uint32_t i = 0; i < (uint32_t)(1 << split_order); i++) {
                     uint32_t idx = (buddy_idx + i) / BITS_PER_WORD;
                     uint32_t bit = (buddy_idx + i) % BITS_PER_WORD;
                     page_bitmap[idx] &= ~(1 << bit);
@@ -184,6 +184,7 @@ void *pmem_alloc_pages(int order) {
     int found = 1;
 
     blocks[0] = first_page;
+    (void)blocks;
 
     for (int o = 1; o <= order && found == 1; o++) {
         uint32_t buddy_idx = first_idx ^ (1 << (o - 1));
@@ -222,7 +223,7 @@ void pmem_free_pages_order(void *addr, int order) {
     if (page_idx >= total_pages) return;
 
     /* Mark pages as free in bitmap */
-    for (uint32_t i = 0; i < (1 << order); i++) {
+    for (uint32_t i = 0; i < (uint32_t)(1 << order); i++) {
         uint32_t idx = page_idx + i;
         uint32_t bitmap_idx = idx / BITS_PER_WORD;
         uint32_t bit = idx % BITS_PER_WORD;

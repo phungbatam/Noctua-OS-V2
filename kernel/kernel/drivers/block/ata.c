@@ -104,9 +104,9 @@ static int ata_identify(ata_device_t *dev) {
     }
 
     if (dev->supports_lba48) {
-        dev->total_sectors = *(uint64_t *)&buf[100];
+        dev->total_sectors = (uint64_t)buf[100] | ((uint64_t)buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48);
     } else if (dev->supports_lba) {
-        dev->total_sectors = *(uint32_t *)&buf[60];
+        dev->total_sectors = (uint32_t)buf[60] | ((uint32_t)buf[61] << 16);
     } else {
         uint32_t cyl = buf[1];
         uint32_t heads = buf[3];

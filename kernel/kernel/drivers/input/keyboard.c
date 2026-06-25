@@ -72,6 +72,7 @@ int keyboard_getchar(void) {
 
         if (sc == 0x3B) return K_F1;
         if (sc == 0x3C) return K_F2;
+        if (sc == 0x58) return K_F12;
 
         if (sc & 0x80) continue;
         if (sc >= sizeof(normal)) continue;
@@ -140,6 +141,7 @@ int keyboard_getchar_nb(void) {
     // Handle function keys
     if (sc == 0x3B) return K_F1;
     if (sc == 0x3C) return K_F2;
+    if (sc == 0x58) return K_F12;
 
     // Ignore key releases
     if (sc & 0x80) return 0;

@@ -89,7 +89,13 @@ OBJS = $(BUILD)/boot.o             \
        $(BUILD)/socket.o           \
         $(BUILD)/shm.o              \
         $(BUILD)/msg.o              \
-        $(BUILD)/commands.o
+        $(BUILD)/commands.o        \
+        $(BUILD)/auth.o            \
+        $(BUILD)/debug_con.o       \
+        $(BUILD)/registry.o        \
+        $(BUILD)/linux.o           \
+        $(BUILD)/noctua.o          \
+        $(BUILD)/dev.o
 
 all: $(BUILD)/noctua.bin
 
@@ -150,6 +156,24 @@ $(BUILD)/procfs.o: kernel/core/procfs.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/commands.o: kernel/core/commands.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/auth.o: kernel/core/auth.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/debug_con.o: kernel/core/debug_con.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/registry.o: kernel/core/cmd/registry.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/linux.o: kernel/core/cmd/linux.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/noctua.o: kernel/core/cmd/noctua.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/dev.o: kernel/core/cmd/dev.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Lib
@@ -369,13 +393,31 @@ run-serial-hdd: iso hdd.img
 
 run-hdd-serial: iso hdd.img
 	qemu-system-i386 \
+		-boot order=d \
 		-drive file=hdd.img,format=raw,id=hd \
 		-drive file=noctua.iso,format=raw,id=cd,media=cdrom \
 		-cpu max \
 		-device piix3-usb-uhci \
 		-device usb-tablet \
-		-serial stdio \
-		-device isa-debug-exit,iobase=0xF4
+		-serial stdio
+
+run-vnc: iso hdd.img
+	qemu-system-i386 \
+		-boot order=d \
+		-drive file=hdd.img,format=raw \
+		-cdrom noctua.iso \
+		-cpu max \
+		-device piix3-usb-uhci \
+		-device usb-tablet \
+		-vnc :0
+
+run-nographic: iso hdd.img
+	qemu-system-i386 \
+		-boot order=d \
+		-drive file=hdd.img,format=raw \
+		-cdrom noctua.iso \
+		-cpu max \
+		-nographic
 
 run-kernel: $(BUILD)/noctua.bin
 	qemu-system-i386 -kernel $(BUILD)/noctua.bin

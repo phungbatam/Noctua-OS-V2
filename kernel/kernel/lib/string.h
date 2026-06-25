@@ -2,6 +2,7 @@
 #define STRING_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 size_t strlen(const char *str);
 void *memset(void *ptr, int value, size_t num);
@@ -13,5 +14,6 @@ char* strcpy(char* dest, const char* src);
 char* strncpy(char* dest, const char* src, size_t n);
 char* strcat(char* dest, const char* src);
 void int2str(int num, char *buf);
+void int2str_hex(uint32_t num, char *buf);
 
 #endif

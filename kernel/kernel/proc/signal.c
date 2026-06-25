@@ -2,10 +2,6 @@
 #include "screen.h"
 #include "string.h"
 
-static const char *sig_names[] = {
-    "", "SIGKILL", "SIGINT", "SIGSEGV", "SIGPIPE", "SIGTERM"
-};
-
 void signal_send(task_t *t, int sig) {
     if (!t || sig <= 0 || sig >= NSIG) return;
 

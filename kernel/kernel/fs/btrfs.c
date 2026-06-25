@@ -74,10 +74,12 @@ int btrfs_search_slot(btrfs_fs_t *fs, btrfs_key_t *key, btrfs_path_t *path) {
         btrfs_node_t *node = path->nodes[level];
         int slot = 0;
         int found = 0;
+        (void)node; (void)found;
 
         /* Binary search for the key */
         int low = 0;
-        int high = 0; /* Need to get item count from header */
+        int high = 0;
+        (void)low; (void)high;
 
         /* Linear search for now (simplified) */
         for (slot = 0; slot < 10; slot++) {

@@ -44,6 +44,18 @@
 #define SYS_RMDIR      37
 #define SYS_UNAME      38
 #define SYS_UNLINK     39
+#define SYS_AUTH_LOGIN   40
+#define SYS_GETUID       41
+#define SYS_GETGID       42
+#define SYS_GETEUID      43
+#define SYS_GETEGID      44
+#define SYS_GETUSERNAME  45
+#define SYS_USERADD      46
+#define SYS_USERDEL      47
+#define SYS_SETPASSWD    48
+#define SYS_GETPASSWD    49
+#define SYS_USERCOUNT    50
+#define SYS_DEBUG_CON    51
 
 /* File descriptor numbers */
 #define STDIN_FILENO  0
@@ -100,6 +112,18 @@ int      sys_mkdir(const char *path);
 int      sys_rmdir(const char *path);
 int      sys_uname(void *buf);
 int      sys_unlink(const char *path);
+int      sys_auth_login(const char *user, const char *pass);
+uint32_t sys_getuid(void);
+uint32_t sys_getgid(void);
+uint32_t sys_geteuid(void);
+uint32_t sys_getegid(void);
+int      sys_getusername(char *buf, uint32_t size);
+int      sys_useradd(const char *name, const char *pass, uint32_t uid, uint32_t gid);
+int      sys_userdel(const char *name);
+int      sys_setpasswd(const char *name, const char *newpass);
+int      sys_getpasswd(const char *name, char *buf, uint32_t size);
+int      sys_usercount(void);
+void     sys_debug_con(void);
 
 #endif
 

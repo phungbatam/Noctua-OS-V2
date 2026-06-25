@@ -235,6 +235,7 @@ int socket_close(int sockfd) {
 
 int socket_setopt(int sockfd, int level, int optname, const void *optval, int optlen) {
     (void)level;
+    (void)optval;
     (void)optlen;
 
     if (sockfd < 0 || sockfd >= MAX_SOCKETS || !sockets[sockfd].used) return -1;

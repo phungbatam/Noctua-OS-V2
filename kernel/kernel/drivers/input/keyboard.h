@@ -19,6 +19,7 @@
 #define K_TAB     0x09
 #define K_BKSP    0x08
 #define K_CTRL_C  0x8D
+#define K_F12     0x8E
 
 void keyboard_init(void);
 int keyboard_getchar(void);

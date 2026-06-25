@@ -465,7 +465,7 @@ void cmd_grep(const char *arg) {
     kfree(buf);
 }
 
-void cmd_find(const char *arg) {
+void editor_find(const char *arg) {
     (void)arg;
     screen_term_write("Searching: / (root)\n");
     vfs_node_t *root = vfs_get_root();

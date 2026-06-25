@@ -33,6 +33,7 @@ void serial_init(void);
 void serial_init_port(uint16_t port);
 int serial_received(uint16_t port);
 char serial_read_char(uint16_t port);
+char serial_read_char_nb(uint16_t port);
 void serial_write_char(uint16_t port, char c);
 void serial_write_str(uint16_t port, const char *str);
 void serial_write_hex(uint16_t port, uint32_t value);
