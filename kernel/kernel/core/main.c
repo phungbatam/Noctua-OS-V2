@@ -159,6 +159,7 @@ static char root_prompt_line[] = "\nroot@noctua # ";
 static int is_root = 0;
 
 void tools_ntua_init(void);
+void setup_init(void);
 
 static unsigned int total_mem_upper = 0;
 static unsigned int total_mem_lower = 0;
@@ -1869,6 +1870,7 @@ void kmain(unsigned int mb_info) {
     cmd_tools_init();
     cmd_editor_init();
     tools_ntua_init();
+    setup_init();
     init_waitqueue_head(&test_wq);
     INIT_LIST_HEAD(&system_wq.head);
     system_wq.running = 1;

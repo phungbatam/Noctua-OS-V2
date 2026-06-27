@@ -100,7 +100,10 @@ OBJS = $(BUILD)/boot.o             \
         $(BUILD)/tools_forensic.o  \
         $(BUILD)/tools_editor.o    \
         $(BUILD)/tools_ntua.o      \
-       $(BUILD)/init_embed.o       \
+        $(BUILD)/setup.o           \
+        $(BUILD)/grub_boot.o       \
+        $(BUILD)/grub_core.o       \
+        $(BUILD)/init_embed.o       \
        $(BUILD)/sh_embed.o         \
        $(BUILD)/test_ring3_embed.o
 
@@ -191,6 +194,20 @@ $(BUILD)/tools_editor.o: kernel/core/cmd/tools_editor.c | $(BUILD)
 
 $(BUILD)/tools_ntua.o: kernel/core/cmd/tools_ntua.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/setup.o: kernel/core/cmd/setup.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# GRUB boot image for disk installation
+$(BUILD)/grub-core.img: | $(BUILD)
+	grub-mkimage -O i386-pc -p /boot/grub -o $@ biosdisk part_msdos fat configfile normal multiboot
+
+$(BUILD)/grub_core.o: $(BUILD)/grub-core.img | $(BUILD)
+	$(LD) -r -b binary -m elf_i386 -o $@ $<
+
+# EMPTY rule: boot.img lives at /usr/lib/grub/i386-pc/boot.img (system file)
+$(BUILD)/grub_boot.o: /usr/lib/grub/i386-pc/boot.img | $(BUILD)
+	$(LD) -r -b binary -m elf_i386 -o $@ $<
 
 # Embedded userspace binaries
 $(BUILD)/init_embed.o: kernel/embed/init_embed.o
@@ -460,7 +477,7 @@ usb: iso
 	@echo "  sudo dd if=noctua.iso of=/dev/sdX bs=4M status=progress conv=fsync"
 
 clean:
-	rm -rf $(BUILD) noctua.iso iso/boot/noctua.bin
+	rm -rf $(BUILD) noctua.iso iso/boot/noctua.bin $(BUILD)/grub-core.img
 
 hdd.img:
 	dd if=/dev/zero of=$@ bs=1M count=64
@@ -481,4 +498,4 @@ hdd.img:
 	umount /mnt; \
 	losetup -d $$LOOP
 
-.PHONY: all iso run run-serial run-iso clean window-test
+.PHONY: all iso run run-serial run-iso clean window-test usb
