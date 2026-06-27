@@ -1,11 +1,11 @@
 section .multiboot
 align 4
     dd 0x1BADB002
-    dd 0x05
-    dd -(0x1BADB002 + 0x05)
+    dd 0x07
+    dd -(0x1BADB002 + 0x07)
     dd 0
-    dd 640
-    dd 400
+    dd 1024
+    dd 768
     dd 32
 
 section .text
@@ -25,5 +25,5 @@ _start:
 section .bss
 align 16
 stack_bottom:
-    resb 32768
+    resb 65536
 stack_top:

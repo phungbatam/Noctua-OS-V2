@@ -6,7 +6,7 @@
 #include "mm/heap.h"
 #include "fs/fat32.h"
 
-#define EDITOR_MAX_LINES   2048
+#define EDITOR_MAX_LINES   512
 #define EDITOR_MAX_LEN     256
 #define EDITOR_TAB_STOP    4
 #define STATUS_BAR_H       1
@@ -197,14 +197,15 @@ static void editor_save(void) {
         return;
     }
 
-    char *buffer = (char *)kmalloc(EDITOR_MAX_LINES * EDITOR_MAX_LEN);
+    int save_buf_size = ed->capacity * EDITOR_MAX_LEN;
+    char *buffer = (char *)kmalloc(save_buf_size);
     if (!buffer) {
         editor_status("ERROR: Out of memory", 1);
         return;
     }
 
     int pos = 0;
-    for (int i = 0; i < ed->num_lines && pos < EDITOR_MAX_LINES * EDITOR_MAX_LEN - 1; i++) {
+    for (int i = 0; i < ed->num_lines && pos < save_buf_size - 1; i++) {
         int l = line_len(i);
         if (pos + l + 1 >= EDITOR_MAX_LINES * EDITOR_MAX_LEN) break;
         memcpy(buffer + pos, ed->lines[i], l);
@@ -278,10 +279,20 @@ void editor_open(const char *filename) {
         return;
     }
 
-    int alloc_size = sizeof(char) * EDITOR_MAX_LINES * EDITOR_MAX_LEN;
+    int cap = EDITOR_MAX_LINES;
+    int alloc_size = sizeof(char) * cap * EDITOR_MAX_LEN;
     char (*lines)[EDITOR_MAX_LEN] = (char (*)[EDITOR_MAX_LEN])kmalloc(alloc_size);
+    while (!lines && cap > 64) {
+        cap /= 2;
+        alloc_size = sizeof(char) * cap * EDITOR_MAX_LEN;
+        lines = (char (*)[EDITOR_MAX_LEN])kmalloc(alloc_size);
+    }
     if (!lines) {
-        screen_term_write("EDITOR: Out of memory\n");
+        char buf[64];
+        screen_term_write("EDITOR: Out of memory (heap free: ");
+        int2str(heap_free(), buf);
+        screen_term_write(buf);
+        screen_term_write(")\n");
         return;
     }
     memset(lines, 0, alloc_size);
@@ -289,7 +300,7 @@ void editor_open(const char *filename) {
     editor_t e;
     ed = &e;
     ed->lines = lines;
-    ed->capacity = EDITOR_MAX_LINES;
+    ed->capacity = cap;
     ed->cx = 0;
     ed->cy = 0;
     ed->sx = 0;

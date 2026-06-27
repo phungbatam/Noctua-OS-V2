@@ -42,6 +42,7 @@ static void fill_line(unsigned char color, int y, int x1, int x2) {
 }
 
 static char scroll_buf[SCROLL_BUF_LINES][81];
+static unsigned char scroll_col_buf[SCROLL_BUF_LINES][80];
 static int scroll_count = 0;
 static int scroll_pos = 0;
 static int view_offset = 0;
@@ -49,18 +50,21 @@ static int in_scroll = 0;
 
 static void buf_add_line(const char *s, int len) {
     int ml = len < 80 ? len : 80;
-    for (int i = 0; i < ml; i++)
+    for (int i = 0; i < ml; i++) {
         scroll_buf[scroll_pos][i] = s[i] ? s[i] : ' ';
+        scroll_col_buf[scroll_pos][i] = content_color;
+    }
     scroll_buf[scroll_pos][ml] = 0;
     scroll_pos = (scroll_pos + 1) % SCROLL_BUF_LINES;
     if (scroll_count < SCROLL_BUF_LINES) scroll_count++;
 }
 
-static int buf_get_line(int idx, char *out) {
+static int buf_get_line(int idx, char *out, unsigned char *col_out) {
     if (idx < 0 || idx >= scroll_count) return 0;
     int actual = (scroll_pos - scroll_count + idx + SCROLL_BUF_LINES) % SCROLL_BUF_LINES;
     memcpy(out, scroll_buf[actual], 80);
     out[80] = 0;
+    if (col_out) memcpy(col_out, scroll_col_buf[actual], 80);
     return 1;
 }
 
@@ -69,9 +73,10 @@ static void scroll_content(void) {
     int start = scroll_count > CONTENT_H ? scroll_count - CONTENT_H : 0;
     for (int y = 0; y < CONTENT_H; y++) {
         char line[81];
-        if (buf_get_line(start + y, line)) {
+        unsigned char col[80];
+        if (buf_get_line(start + y, line, col)) {
             for (int x = 0; x < cw; x++)
-                draw_char_at(CONTENT_X + x, CONTENT_Y + y, line[x], content_color);
+                draw_char_at(CONTENT_X + x, CONTENT_Y + y, line[x], col[x]);
         } else {
             fill_line(content_color, CONTENT_Y + y, CONTENT_X, CONTENT_X + cw - 1);
         }
@@ -186,7 +191,7 @@ void screen_set_content_color(unsigned char c) { content_color = c; }
 void screen_clear_content(void) {
     int cw = CONTENT_W < 80 ? CONTENT_W : 80;
     for (int y = CONTENT_Y; y < CONTENT_Y + CONTENT_H; y++)
-        fill_line(content_color, y, CONTENT_X, CONTENT_X + cw - 1);
+        fill_line(C_INFO, y, CONTENT_X, CONTENT_X + cw - 1);
     term_row = CONTENT_Y;
     term_col = CONTENT_X;
     for (int i = 0; i < 80; i++) current_line[i] = 0;
@@ -202,11 +207,12 @@ void screen_redraw_content(void) {
     if (start < 0) start = 0;
     for (int y = 0; y < CONTENT_H; y++) {
         char line[81];
-        if (buf_get_line(start + y, line)) {
+        unsigned char col[80];
+        if (buf_get_line(start + y, line, col)) {
             for (int x = 0; x < cw; x++)
-                draw_char_at(CONTENT_X + x, CONTENT_Y + y, line[x], content_color);
+                draw_char_at(CONTENT_X + x, CONTENT_Y + y, line[x], col[x]);
         } else {
-            fill_line(content_color, CONTENT_Y + y, CONTENT_X, CONTENT_X + cw - 1);
+            fill_line(C_INFO, CONTENT_Y + y, CONTENT_X, CONTENT_X + cw - 1);
         }
     }
     draw_scrollbar();

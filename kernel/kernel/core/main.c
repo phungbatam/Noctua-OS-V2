@@ -27,6 +27,7 @@
 #include "arch/isr.h"
 #include "arch/ports.h"
 #include "arch/cpuid.h"
+#include "arch/acpi.h"
 
 /* ============================================
    Memory Management
@@ -154,6 +155,10 @@ int netif_rtl8139_poll(netif_t *ni, uint8_t *buffer, uint32_t *len) {
 #define BUFSZ 256
 
 static char prompt_line[] = "\nuser@noctua > ";
+static char root_prompt_line[] = "\nroot@noctua # ";
+static int is_root = 0;
+
+void tools_ntua_init(void);
 
 static unsigned int total_mem_upper = 0;
 static unsigned int total_mem_lower = 0;
@@ -1863,6 +1868,7 @@ void kmain(unsigned int mb_info) {
     cmd_dev_init();
     cmd_tools_init();
     cmd_editor_init();
+    tools_ntua_init();
     init_waitqueue_head(&test_wq);
     INIT_LIST_HEAD(&system_wq.head);
     system_wq.running = 1;
@@ -1899,6 +1905,10 @@ void kmain(unsigned int mb_info) {
     rtc_init();
     uptime_init();
     boot_print("RTC ", "Real-time clock...");
+    boot_ok();
+
+    acpi_init();
+    boot_print("ACPI", "ACPI power management...");
     boot_ok();
 
     tty_init();
@@ -1977,8 +1987,9 @@ void kmain(unsigned int mb_info) {
     screen_set_content_color(C_INFO);
     screen_term_write(" Type 'help' for available commands\n");
 
-    screen_set_content_color(C_PROMPT);
-    screen_term_write(prompt_line);
+    is_root = (task_current() && task_current()->uid == 0);
+    screen_set_content_color(is_root ? C_ERROR : C_PROMPT);
+    screen_term_write(is_root ? root_prompt_line : prompt_line);
     screen_set_content_color(C_INPUT);
 
     char buf[BUFSZ];
@@ -2038,8 +2049,8 @@ void kmain(unsigned int mb_info) {
         if (k == K_F12) {
             debug_con_enter();
             screen_draw_header();
-            screen_set_content_color(C_PROMPT);
-            screen_term_write(prompt_line);
+            screen_set_content_color(is_root ? C_ERROR : C_PROMPT);
+            screen_term_write(is_root ? root_prompt_line : prompt_line);
             screen_set_content_color(C_INPUT);
             prompt_x = screen_get_term_x();
             prompt_y = screen_get_term_y();
@@ -2140,8 +2151,8 @@ void kmain(unsigned int mb_info) {
             cursor = 0;
             buf[0] = 0;
             screen_draw_header();
-            screen_set_content_color(C_PROMPT);
-            screen_term_write(prompt_line);
+            screen_set_content_color(is_root ? C_ERROR : C_PROMPT);
+            screen_term_write(is_root ? root_prompt_line : prompt_line);
             screen_set_content_color(C_INPUT);
             prompt_x = screen_get_term_x();
             prompt_y = screen_get_term_y();

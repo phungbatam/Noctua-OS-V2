@@ -17,6 +17,7 @@
 #include "klog.h"
 #include "arch/cpuid.h"
 #include "mm/page.h"
+#include "arch/acpi.h"
 
 char cwd[64] = "/";
 
@@ -40,6 +41,8 @@ static int cmd_help_handler(const char *args) {
     scr("  dd, sector, diskedit, wipe, recover, binwalk\n");
     scr("  foremost, testdisk, md5sum, sha1sum, meminfo\n");
     scr("  registers, syslog, portscan\n");
+    scr(" Editor:  nano, vi, sed, diff, sort, uniq, wc\n");
+    scr("  head, tail, nl, tac, cut, tr, expand, fold\n");
     scr(" Type 'noctua-help' for 200 Noctua-native commands\n");
     return CMD_RET_OK;
 }
@@ -95,11 +98,19 @@ static int cmd_echo(const char *args) {
 
 static int cmd_info(const char *args) {
     (void)args;
+    char buf[32], cv[32], cb[64];
+    get_cpu_vendor(cv);
+    get_cpu_brand(cb);
     sch(); scr("=== System Info ===\n"); scf();
-    scr(" OS: Noctua OS 1.0 (x86)\n");
-    scr(" Kernel: Custom monolithic\n");
-    scr(" Boot: Multiboot (GRUB)\n");
-    scr(" Mode: 32-bit Protected Mode\n");
+    scr(" OS:     Noctua OS 1.0 (x86)\n");
+    scr(" Kernel: Noctua-kernel v1.0\n");
+    scr(" CPU:    "); scr(cv); scr(" - "); scr(cb); scr("\n");
+    uint32_t total_mb = pmem_total_pages() / 256;
+    uint32_t free_mb = pmem_free_pages() / 256;
+    scr(" RAM:    "); int2str((int)total_mb, buf); scr(buf);
+    scr(" MB (free: "); int2str((int)free_mb, buf); scr(buf); scr(" MB)\n");
+    scr(" Boot:   Multiboot (GRUB)\n");
+    scr(" Mode:   32-bit Protected Mode\n");
     return CMD_RET_OK;
 }
 
@@ -297,23 +308,43 @@ static int cmd_cow(const char *args) {
     return CMD_RET_OK;
 }
 
-static int cmd_reboot(const char *args) {
-    (void)args;
+static void do_reboot(void) {
     scr(" Rebooting...\n");
+    /* Try ACPI reset first */
+    if (acpi_reboot() == 0) { for (;;); }
+    /* Fallback: PS/2 keyboard controller reset */
     uint8_t good = 0x02;
     while (good & 0x02) good = inb(0x64);
     outb(0x64, 0xFE);
     for (;;);
+}
+
+static void do_poweroff(void) {
+    scr(" Powering off...\n");
+    /* Try ACPI poweroff first */
+    if (acpi_poweroff() == 0) { for (;;); }
+    /* Fallback: legacy ACPI poweroff ports */
+    outw(0xB004, 0x2000);
+    outw(0x604, 0x2000);
+    outw(0x4004, 0x3400);
+    /* Last resort: triple fault via IDT */
+    for (;;);
+}
+
+static int cmd_reboot(const char *args) {
+    (void)args;
+    do_reboot();
     return CMD_RET_OK;
 }
 
 static int cmd_shutdown(const char *args) {
-    (void)args;
-    scr(" Shutting down...\n");
-    outw(0xB004, 0x2000);
-    outw(0x604, 0x2000);
-    outw(0x4004, 0x3400);
-    for (;;);
+    if (args && args[0] == '-') {
+        while (*args == ' ') args++;
+        if (strcmp(args, "-r") == 0 || strcmp(args, "-r now") == 0) { do_reboot(); return CMD_RET_OK; }
+        if (strcmp(args, "-h") == 0 || strcmp(args, "-h now") == 0) { do_poweroff(); return CMD_RET_OK; }
+        if (strcmp(args, "-p") == 0 || strcmp(args, "-p now") == 0) { do_poweroff(); return CMD_RET_OK; }
+    }
+    do_poweroff();
     return CMD_RET_OK;
 }
 
@@ -599,12 +630,27 @@ static int cmd_sys_install_handler(const char *args) {
 
 static int cmd_diag(const char *args) {
     (void)args;
+    char buf[16], cv[32], cb[64];
+    get_cpu_vendor(cv);
+    get_cpu_brand(cb);
     sch(); scr("=== Diagnostics ===\n"); scf();
-    scr(" CPU: x86 compatible\n");
-    scr(" RAM: "); char buf[16]; int2str(heap_free() / 1024, buf); scr(buf); scr(" KB free\n");
+    scr(" CPU Vendor: "); scr(cv); scr("\n");
+    scr(" CPU Model:  "); scr(cb); scr("\n");
+    uint32_t total_mb = pmem_total_pages() / 256;
+    uint32_t free_mb = pmem_free_pages() / 256;
+    scr(" RAM Total:  "); int2str((int)total_mb, buf); scr(buf); scr(" MB\n");
+    scr(" RAM Free:   "); int2str((int)free_mb, buf); scr(buf); scr(" MB\n");
+    scr(" Heap Free:  "); int2str((int)(heap_free() / 1024), buf); scr(buf); scr(" KB\n");
     rtc_time_t tm; rtc_read_time(&tm);
-    scr(" RTC: "); int2str(tm.hour, buf); scr(buf); scr(":");
+    scr(" RTC:        "); int2str(tm.hour, buf); scr(buf); scr(":");
     int2str(tm.minute, buf); scr(buf); scr(":"); int2str(tm.second, buf); scr(buf); scr("\n");
+    for (int d = 0; d < 4; d++) {
+        partition_info_t *pi = partition_get(d);
+        if (pi && pi->sector_count > 0) {
+            scr(" Disk"); int2str(d, buf); scr(buf); scr(": ");
+            int2str((int)(pi->sector_count / 2048), buf); scr(buf); scr(" MB\n");
+        }
+    }
     scr(" Status: OK\n");
     return CMD_RET_OK;
 }

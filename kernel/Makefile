@@ -27,8 +27,9 @@ OBJS = $(BUILD)/boot.o             \
        $(BUILD)/fb.o               \
        $(BUILD)/font.o             \
        $(BUILD)/editor.o           \
-       $(BUILD)/ports.o            \
-       $(BUILD)/cpuid.o            \
+        $(BUILD)/ports.o             \
+        $(BUILD)/acpi.o              \
+        $(BUILD)/cpuid.o             \
        $(BUILD)/gdt.o              \
        $(BUILD)/hw.o               \
        $(BUILD)/isr_asm.o          \
@@ -98,6 +99,7 @@ OBJS = $(BUILD)/boot.o             \
         $(BUILD)/dev.o             \
         $(BUILD)/tools_forensic.o  \
         $(BUILD)/tools_editor.o    \
+        $(BUILD)/tools_ntua.o      \
        $(BUILD)/init_embed.o       \
        $(BUILD)/sh_embed.o         \
        $(BUILD)/test_ring3_embed.o
@@ -187,6 +189,9 @@ $(BUILD)/tools_forensic.o: kernel/core/cmd/tools_forensic.c | $(BUILD)
 $(BUILD)/tools_editor.o: kernel/core/cmd/tools_editor.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(BUILD)/tools_ntua.o: kernel/core/cmd/tools_ntua.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # Embedded userspace binaries
 $(BUILD)/init_embed.o: kernel/embed/init_embed.o
 	cp $< $@
@@ -231,6 +236,9 @@ $(BUILD)/editor.o: kernel/ui/editor.c | $(BUILD)
 
 # Arch
 $(BUILD)/ports.o: kernel/arch/ports.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/acpi.o: kernel/arch/acpi.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/cpuid.o: kernel/arch/cpuid.c | $(BUILD)
@@ -442,6 +450,14 @@ run-nographic: iso hdd.img
 
 run-kernel: $(BUILD)/noctua.bin
 	qemu-system-i386 -kernel $(BUILD)/noctua.bin
+
+usb: iso
+	@echo "To create a bootable USB:"
+	@echo "  sudo ../tools/make-usb.sh /dev/sdX"
+	@echo "  (replace /dev/sdX with your USB device)"
+	@echo ""
+	@echo "Or manually:"
+	@echo "  sudo dd if=noctua.iso of=/dev/sdX bs=4M status=progress conv=fsync"
 
 clean:
 	rm -rf $(BUILD) noctua.iso iso/boot/noctua.bin

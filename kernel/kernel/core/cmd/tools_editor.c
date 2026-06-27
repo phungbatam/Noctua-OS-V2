@@ -2,6 +2,8 @@
 #include "screen.h"
 #include "string.h"
 #include "editor.h"
+#include "fs/fat32.h"
+#include "heap.h"
 
 static void scr(const char *s) { screen_term_write(s); }
 static void scf(void) { screen_set_content_color(C_INFO); }
