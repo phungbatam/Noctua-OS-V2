@@ -40,7 +40,7 @@ static int elf_load_segment(elf_header_t *header, elf_program_header_t *ph,
     for (uint32_t p = page_start; p < page_end; p += PAGE_SIZE) {
         void *phys = pmem_alloc_page();
         if (!phys) return -1;
-        paging_map_page((void *)p, phys, PAGE_PRESENT | PAGE_WRITE);
+        paging_map_page((void *)p, phys, PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
     }
 
     /* Read file data into memory */

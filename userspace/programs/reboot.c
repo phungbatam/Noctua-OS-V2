@@ -4,7 +4,7 @@
 int main(void) {
     puts("Noctua OS: System halted (use Ctrl+C in QEMU)");
     for (;;) {
-        sleep(10000);
+        sleep(10);
     }
     return 0;
 }

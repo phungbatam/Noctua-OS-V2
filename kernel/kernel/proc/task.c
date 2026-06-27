@@ -41,8 +41,18 @@ void task_init_system(void) {
     idle_task->parent = 0;
     idle_task->children = 0;
     idle_task->sibling = 0;
+    idle_task->uid = 0;
+    idle_task->euid = 0;
+    idle_task->gid = 0;
+    idle_task->egid = 0;
+    strcpy(idle_task->cwd, "/");
     for (int i = 0; i < NSIG; i++)
         idle_task->sig_handlers[i] = SIG_DFL;
+
+    /* Init fd table for idle: stdin/stdout/stderr */
+    idle_task->fds[0].is_open = 1;
+    idle_task->fds[1].is_open = 1;
+    idle_task->fds[2].is_open = 1;
 
     current_task = idle_task;
 }
@@ -71,8 +81,18 @@ int task_create(const char *name, void (*entry)(void), uint32_t priority) {
     t->total_cpu_ticks = 0;
     t->sig_pending = 0;
     t->sig_blocked = 0;
+    t->uid = 0;
+    t->euid = 0;
+    t->gid = 0;
+    t->egid = 0;
+    strcpy(t->cwd, "/");
     for (i = 0; i < NSIG; i++)
         t->sig_handlers[i] = SIG_DFL;
+
+    /* Init fd table: stdin/stdout/stderr */
+    t->fds[0].is_open = 1;
+    t->fds[1].is_open = 1;
+    t->fds[2].is_open = 1;
 
     /* Cấp phát kernel stack */
     t->kernel_stack = (uint32_t *)pmem_alloc_page();
@@ -82,25 +102,23 @@ int task_create(const char *name, void (*entry)(void), uint32_t priority) {
     }
     t->kernel_stack_size = PAGE_SIZE;
 
-    /* Setup stack cho lần context-switch đầu tiên.
-     * Layout phải giống như interrupt frame mà irq_common_stub để lại:
-     *   [esp+0]  = err_code (dummy) -> add esp,8 skip
-     *   [esp+4]  = int_no   (dummy) -> add esp,8 skip
-     *   [esp+8]  = eip
-     *   [esp+12] = cs (0x08 = kernel code segment)
-     *   [esp+16] = eflags */
+    /* Setup stack cho lần context-switch đầu tiên (kernel task) */
     uint32_t *stack = (uint32_t *)((uint32_t)t->kernel_stack + PAGE_SIZE);
     *--stack = 0x202;   /* eflags */
-    *--stack = 0x08;    /* cs */
+    *--stack = 0x08;    /* cs - kernel code */
     *--stack = (uint32_t)entry; /* eip */
     *--stack = 0;       /* int_no dummy */
     *--stack = 0;       /* err_code dummy */
     t->context.esp = (uint32_t)stack;
     t->context.eip = (uint32_t)entry;
     t->context.eflags = 0x202;
+    t->context.cs = 0x08;
+    t->context.ss = 0x10;
+    t->context.ds = 0x10;
     t->context.cr3 = 0;
 
     task_link_child(current_task, t);
+    sched_add(t);
     task_count++;
     return t->id;
 }
@@ -116,7 +134,6 @@ int task_fork(void) {
 
     child->id = pid_alloc();
     if (child->id < 0) {
-        pmem_free_page(child->kernel_stack);
         memset(child, 0, sizeof(task_t));
         return -1;
     }
@@ -132,8 +149,19 @@ int task_fork(void) {
     child->exit_code = 0;
     child->sig_pending = 0;
     child->sig_blocked = parent->sig_blocked;
+    child->uid = parent->uid;
+    child->euid = parent->euid;
+    child->gid = parent->gid;
+    child->egid = parent->egid;
+    strcpy(child->cwd, parent->cwd);
+    child->pgdir = parent->pgdir;
     for (int i = 0; i < NSIG; i++)
         child->sig_handlers[i] = parent->sig_handlers[i];
+
+    /* Clone fd table from parent */
+    for (int i = 0; i < TASK_FD_MAX; i++) {
+        child->fds[i] = parent->fds[i];
+    }
 
     /* Cấp phát kernel stack mới và copy stack content */
     child->kernel_stack = (uint32_t *)pmem_alloc_page();
@@ -170,15 +198,16 @@ int task_fork(void) {
 void task_exit(int code) {
     task_t *t = current_task;
     if (!t) return;
-    pid_free(t->pid);
     t->state = TASK_ZOMBIE;
     t->exit_code = code;
+    /* Don't free PID yet - waitpid() will reclaim it */
     /* Báo hiệu cho parent (nếu đang WAITING) */
     task_t *par = t->parent;
     if (par && par->state == TASK_WAITING) {
         par->state = TASK_READY;
     }
     task_yield();
+    for (;;) asm("hlt");
 }
 
 void task_yield(void) {

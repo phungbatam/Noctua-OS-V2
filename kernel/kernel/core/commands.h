@@ -12,5 +12,7 @@ void cmd_show_noctua_commands(void);
 void cmd_noctua_init(void);
 void cmd_linux_init(void);
 void cmd_dev_init(void);
+void cmd_tools_init(void);
+void cmd_editor_init(void);
 
 #endif

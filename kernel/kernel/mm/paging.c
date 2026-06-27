@@ -32,9 +32,24 @@ void paging_map_page(void *virt, void *phys, uint32_t flags) {
     uint32_t pt_idx = PT_IDX(virt);
 
     if (!(page_directory[pd_idx] & PAGE_PRESENT)) {
+        /* No PDE at all - create new page table */
         uint32_t *pt = (uint32_t *)pmem_alloc_page();
         memset(pt, 0, PAGE_SIZE);
         page_directory[pd_idx] = ((uint32_t)pt) | PAGE_PRESENT | PAGE_WRITE;
+    } else if (page_directory[pd_idx] & PAGE_4MB) {
+        /* PDE is a 4MB page - need to split into 4KB page table */
+        uint32_t pde_flags = page_directory[pd_idx] & 0xFFF;
+        uint32_t large_phys = page_directory[pd_idx] & 0xFFC00000;
+        uint32_t *pt = (uint32_t *)pmem_alloc_page();
+        if (!pt) return;
+        /* Fill new page table with 1024 entries mapping the 4MB region */
+        for (uint32_t i = 0; i < 1024; i++) {
+            pt[i] = (large_phys + i * PAGE_SIZE) | (pde_flags & ~PAGE_4MB);
+        }
+        /* Replace PDE to point to page table (clear 4MB/PS flag, merge caller's access bits) */
+        page_directory[pd_idx] = ((uint32_t)pt) | (pde_flags & ~PAGE_4MB) | (flags & (PAGE_USER | PAGE_WRITE));
+        /* Flush TLB for this 4MB region */
+        asm volatile("invlpg (%0)" : : "r"(virt));
     }
 
     uint32_t *pt = (uint32_t *)(page_directory[pd_idx] & PAGE_MASK);

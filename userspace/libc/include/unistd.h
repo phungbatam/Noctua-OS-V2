@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 
 /* Syscall numbers */
 #define SYS_OPEN       1
@@ -44,6 +45,27 @@
 #define SYS_RMDIR      37
 #define SYS_UNAME      38
 #define SYS_UNLINK     39
+#define SYS_AUTH_LOGIN   40
+#define SYS_GETUID       41
+#define SYS_GETGID       42
+#define SYS_GETEUID      43
+#define SYS_GETEGID      44
+#define SYS_GETUSERNAME  45
+#define SYS_USERADD      46
+#define SYS_USERDEL      47
+#define SYS_SETPASSWD    48
+#define SYS_GETPASSWD    49
+#define SYS_USERCOUNT    50
+#define SYS_DEBUG_CON    51
+#define SYS_GETDENTS    52
+#define SYS_IOCTL       53
+#define SYS_ACCESS      54
+#define SYS_TIME        55
+#define SYS_GETTIMEOFDAY 56
+#define SYS_GETCWD      57
+#define SYS_CHMOD       58
+#define SYS_SETUID      59
+#define SYS_SETGID      60
 
 /* Standard file descriptors */
 #define STDIN_FILENO  0
@@ -55,13 +77,14 @@
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-/* open flags */
+/* open flags - also in fcntl.h */
 #define O_RDONLY    0
 #define O_WRONLY    1
 #define O_RDWR      2
 #define O_CREAT     0x40
 #define O_TRUNC     0x200
 #define O_APPEND    0x400
+#define O_EXCL      0x80
 
 long syscall(long number, ...);
 
@@ -71,6 +94,7 @@ ssize_t write(int fd, const void *buf, size_t count);
 int close(int fd);
 pid_t getpid(void);
 void exit(int status);
+void _exit(int status);
 void *sbrk(intptr_t increment);
 int pipe(int pipefd[2]);
 void sleep(uint32_t ms);
@@ -88,5 +112,27 @@ int mkdir(const char *path);
 int rmdir(const char *path);
 int uname(void *buf);
 int unlink(const char *path);
+
+int auth_login(const char *user, const char *pass);
+unsigned int getuid(void);
+unsigned int getgid(void);
+unsigned int geteuid(void);
+unsigned int getegid(void);
+int getusername(char *buf, unsigned int size);
+int useradd(const char *name, const char *pass, unsigned int uid, unsigned int gid);
+int userdel(const char *name);
+int setpasswd(const char *name, const char *newpass);
+int getpasswd(const char *name, char *buf, unsigned int size);
+int usercount(void);
+void debug_con(void);
+int getdents(int fd, void *buf, unsigned int count);
+int ioctl(int fd, int cmd, void *arg);
+int access(const char *path, int mode);
+unsigned int time(unsigned int *tloc);
+int gettimeofday(struct timeval *tv, struct timezone *tz);
+char *getcwd(char *buf, unsigned int size);
+int chmod(const char *path, int mode);
+int setuid(unsigned int uid);
+int setgid(unsigned int gid);
 
 #endif

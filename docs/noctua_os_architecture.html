@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System Architecture · Kernel Diagram</title>
+    <style>
+        /* ── reset & base ── */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #f6f5fc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 24px;
+        }
+
+        /* ── color tokens (light) ── */
+        :root {
+            --bg-page: #f6f5fc;
+            --surface: #ffffff;
+            --border-subtle: rgba(0, 0, 0, 0.06);
+            --text-primary: #1a1a2e;
+            --text-secondary: #4a4a6a;
+            --text-muted: #7a7a9a;
+
+            /* layer colors */
+            --us-bg: #eeedfe;
+            --us-bd: #a9a3ec;
+            --us-tx: #3c3489;
+
+            --sc-bg: #fcebeb;
+            --sc-bd: #f09595;
+            --sc-tx: #791f1f;
+
+            --pr-bg: #e6f1fb;
+            --pr-bd: #85b7eb;
+            --pr-tx: #0c447c;
+
+            --fs-bg: #e1f5ee;
+            --fs-bd: #5dcaa5;
+            --fs-tx: #085041;
+
+            --nt-bg: #eaf3de;
+            --nt-bd: #97c459;
+            --nt-tx: #27500a;
+
+            --mm-bg: #faedda;
+            --mm-bd: #ef9f27;
+            --mm-tx: #633806;
+
+            --ip-bg: #fbeaf0;
+            --ip-bd: #ed93b1;
+            --ip-tx: #72243e;
+
+            --sv-bg: #f1efe8;
+            --sv-bd: #b4b2a9;
+            --sv-tx: #444441;
+
+            --dr-bg: #fff8ec;
+            --dr-bd: #fac775;
+            --dr-tx: #854f0b;
+
+            --ar-bg: #faece7;
+            --ar-bd: #f0997b;
+            --ar-tx: #712b13;
+
+            --hw-bg: #d3d1c7;
+            --hw-bd: #888780;
+            --hw-tx: #2c2c2a;
+
+            --kern-bg: #f0f2fa;
+            --kern-bd: #c8cce0;
+        }
+
+        /* ── dark mode ── */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-page: #12121e;
+                --surface: #1a1a2e;
+                --border-subtle: rgba(255, 255, 255, 0.06);
+                --text-primary: #ececf6;
+                --text-secondary: #b8b8d0;
+                --text-muted: #8888aa;
+
+                --us-bg: #26215c;
+                --us-bd: #7f77dd;
+                --us-tx: #cecbf6;
+
+                --sc-bg: #501313;
+                --sc-bd: #e24b4a;
+                --sc-tx: #f7c1c1;
+
+                --pr-bg: #042c53;
+                --pr-bd: #378add;
+                --pr-tx: #b5d4f4;
+
+                --fs-bg: #04342c;
+                --fs-bd: #1d9e75;
+                --fs-tx: #9fe1cb;
+
+                --nt-bg: #173404;
+                --nt-bd: #639922;
+                --nt-tx: #c0dd97;
+
+                --mm-bg: #412402;
+                --mm-bd: #ba7517;
+                --mm-tx: #fac775;
+
+                --ip-bg: #4b1528;
+                --ip-bd: #d4537e;
+                --ip-tx: #f4c0d1;
+
+                --sv-bg: #2c2c2a;
+                --sv-bd: #888780;
+                --sv-tx: #d3d1c7;
+
+                --dr-bg: #412402;
+                --dr-bd: #ef9f27;
+                --dr-tx: #fac775;
+
+                --ar-bg: #4a1b0c;
+                --ar-bd: #d85a30;
+                --ar-tx: #f5c4b3;
+
+                --hw-bg: #444441;
+                --hw-bd: #888780;
+                --hw-tx: #f1efe8;
+
+                --kern-bg: #1c1c30;
+                --kern-bd: #3a3a5a;
+            }
+        }
+
+        /* ── main card ── */
+        .arch-card {
+            background: var(--surface);
+            border-radius: 24px;
+            padding: 32px 28px 28px;
+            max-width: 880px;
+            width: 100%;
+            box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.15), 0 4px 20px -8px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border-subtle);
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .arch-title {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .arch-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-subtle);
+        }
+
+        .arch {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+
+        /* ── sections ── */
+        .section {
+            border-radius: 14px;
+            padding: 12px 16px;
+            border: 1px solid transparent;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .sec-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            opacity: 0.85;
+        }
+
+        /* ── pills / tags ── */
+        .boxes {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+            font-weight: 450;
+            letter-spacing: 0.01em;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        /* ── arrow row ── */
+        .arrow-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 0 4px;
+            gap: 8px;
+            position: relative;
+        }
+        .arrow-row::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            width: 1.5px;
+            height: 100%;
+            background: var(--border-subtle);
+            transform: translateX(-50%);
+        }
+        .arrow-label {
+            position: relative;
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--surface);
+            padding: 0 12px;
+            z-index: 1;
+            border-radius: 20px;
+            font-weight: 450;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            border: 1px solid var(--border-subtle);
+            padding: 3px 14px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* ── kernel wrap ── */
+        .kern-wrap {
+            border-radius: 14px;
+            padding: 14px 16px 16px;
+            border: 1px solid var(--kern-bd);
+            background: var(--kern-bg);
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .kern-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .kern-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 2px;
+        }
+
+        .kcol {
+            border-radius: 10px;
+            padding: 10px 10px 8px;
+            border: 1px solid transparent;
+            background: var(--surface);
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .kcol-h {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            opacity: 0.8;
+        }
+
+        .kbox {
+            border-radius: 5px;
+            padding: 3px 8px;
+            font-size: 11px;
+            margin-bottom: 3px;
+            border: 1px solid transparent;
+            font-weight: 430;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .kbox:last-child {
+            margin-bottom: 0;
+        }
+
+        /* ── service row ── */
+        .svc-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .scol {
+            border-radius: 10px;
+            padding: 10px 10px 8px;
+            border: 1px solid transparent;
+            background: var(--surface);
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        /* ── grids ── */
+        .d3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+        }
+        .d2x3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+
+        /* ── hardware text ── */
+        .hw-text {
+            color: var(--hw-tx);
+            font-size: 12px;
+            text-align: center;
+            padding: 4px 0 2px;
+            font-weight: 430;
+            letter-spacing: 0.01em;
+        }
+
+        /* ── layer color mixins ── */
+
+        /* Userspace */
+        .us-sec {
+            background: var(--us-bg);
+            border-color: var(--us-bd);
+        }
+        .us-h {
+            color: var(--us-tx);
+        }
+        .us-p {
+            background: color-mix(in srgb, var(--us-bg) 50%, var(--surface));
+            border-color: var(--us-bd);
+            color: var(--us-tx);
+        }
+
+        /* Syscall */
+        .sc-sec {
+            background: var(--sc-bg);
+            border-color: var(--sc-bd);
+        }
+        .sc-h {
+            color: var(--sc-tx);
+        }
+        .sc-p {
+            background: color-mix(in srgb, var(--sc-bg) 50%, var(--surface));
+            border-color: var(--sc-bd);
+            color: var(--sc-tx);
+        }
+
+        /* Process */
+        .pr-col {
+            background: color-mix(in srgb, var(--pr-bg) 55%, var(--surface));
+            border-color: var(--pr-bd);
+        }
+        .pr-h {
+            color: var(--pr-tx);
+        }
+        .pr-b {
+            background: color-mix(in srgb, var(--pr-bg) 45%, var(--surface));
+            border-color: var(--pr-bd);
+            color: var(--pr-tx);
+        }
+
+        /* Filesystem */
+        .fs-col {
+            background: color-mix(in srgb, var(--fs-bg) 55%, var(--surface));
+            border-color: var(--fs-bd);
+        }
+        .fs-h {
+            color: var(--fs-tx);
+        }
+        .fs-b {
+            background: color-mix(in srgb, var(--fs-bg) 45%, var(--surface));
+            border-color: var(--fs-bd);
+            color: var(--fs-tx);
+        }
+
+        /* Network */
+        .nt-col {
+            background: color-mix(in srgb, var(--nt-bg) 55%, var(--surface));
+            border-color: var(--nt-bd);
+        }
+        .nt-h {
+            color: var(--nt-tx);
+        }
+        .nt-b {
+            background: color-mix(in srgb, var(--nt-bg) 45%, var(--surface));
+            border-color: var(--nt-bd);
+            color: var(--nt-tx);
+        }
+
+        /* Memory */
+        .mm-col {
+            background: color-mix(in srgb, var(--mm-bg) 55%, var(--surface));
+            border-color: var(--mm-bd);
+        }
+        .mm-h {
+            color: var(--mm-tx);
+        }
+        .mm-b {
+            background: color-mix(in srgb, var(--mm-bg) 45%, var(--surface));
+            border-color: var(--mm-bd);
+            color: var(--mm-tx);
+        }
+
+        /* IPC */
+        .ip-col {
+            background: color-mix(in srgb, var(--ip-bg) 55%, var(--surface));
+            border-color: var(--ip-bd);
+        }
+        .ip-h {
+            color: var(--ip-tx);
+        }
+        .ip-b {
+            background: color-mix(in srgb, var(--ip-bg) 45%, var(--surface));
+            border-color: var(--ip-bd);
+            color: var(--ip-tx);
+        }
+
+        /* System services */
+        .sv-col {
+            background: color-mix(in srgb, var(--sv-bg) 55%, var(--surface));
+            border-color: var(--sv-bd);
+        }
+        .sv-h {
+            color: var(--sv-tx);
+        }
+        .sv-b {
+            background: color-mix(in srgb, var(--sv-bg) 45%, var(--surface));
+            border-color: var(--sv-bd);
+            color: var(--sv-tx);
+        }
+
+        /* Drivers */
+        .dr-sec {
+            background: var(--dr-bg);
+            border-color: var(--dr-bd);
+        }
+        .dr-h {
+            color: var(--dr-tx);
+        }
+        .dr-p {
+            background: color-mix(in srgb, var(--dr-bg) 50%, var(--surface));
+            border-color: var(--dr-bd);
+            color: var(--dr-tx);
+        }
+
+        /* Architecture */
+        .ar-sec {
+            background: var(--ar-bg);
+            border-color: var(--ar-bd);
+        }
+        .ar-h {
+            color: var(--ar-tx);
+        }
+        .ar-p {
+            background: color-mix(in srgb, var(--ar-bg) 50%, var(--surface));
+            border-color: var(--ar-bd);
+            color: var(--ar-tx);
+        }
+
+        /* Hardware */
+        .hw-sec {
+            background: var(--hw-bg);
+            border-color: var(--hw-bd);
+        }
+        .hw-h {
+            color: var(--hw-tx);
+        }
+
+        /* ── responsive ── */
+        @media (max-width: 720px) {
+            .arch-card {
+                padding: 20px 14px 18px;
+                border-radius: 18px;
+            }
+            .kern-cols {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            .svc-row {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+            .d2x3 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .d3 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .pill {
+                white-space: normal;
+                font-size: 10px;
+                padding: 3px 8px;
+            }
+            .arch-title {
+                font-size: 12px;
+                margin-bottom: 16px;
+            }
+        }
+
+        @media (max-width: 440px) {
+            .kern-cols {
+                grid-template-columns: 1fr;
+            }
+            .d2x3 {
+                grid-template-columns: 1fr;
+            }
+            .d3 {
+                grid-template-columns: 1fr;
+            }
+            .section {
+                padding: 10px 12px;
+            }
+            .arch-card {
+                padding: 14px 10px 14px;
+            }
+            .arrow-label {
+                font-size: 9px;
+                padding: 2px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="arch-card">
+        <div class="arch-title">⛁ System Architecture · x86</div>
+
+        <div class="arch">
+
+            <!-- ─── Userspace ─── -->
+            <div class="section us-sec">
+                <div class="sec-label us-h">Userspace · Ring 3</div>
+                <div class="boxes">
+                    <span class="pill us-p">/bin/init · PID 1</span>
+                    <span class="pill us-p">/bin/sh</span>
+                    <span class="pill us-p">/bin/login</span>
+                    <span class="pill us-p">ls · cat · ps · top · … (24 programs)</span>
+                </div>
+                <div class="boxes" style="margin-top:5px">
+                    <span class="pill us-p" style="width:100%;text-align:center">libc · syscall wrappers + stdio / stdlib / string</span>
+                </div>
+            </div>
+
+            <!-- ─── arrow ─── -->
+            <div class="arrow-row"><span class="arrow-label">int 0x80 · syscall_handler()</span></div>
+
+            <!-- ─── Syscall ─── -->
+            <div class="section sc-sec">
+                <div class="sec-label sc-h">Syscall interface</div>
+                <div class="boxes" style="justify-content:center">
+                    <span class="pill sc-p">51 system calls — open · read · write · fork · execve · pipe · shm · msg · auth …</span>
+                </div>
+            </div>
+
+            <!-- ─── arrow ─── -->
+            <div class="arrow-row"><span class="arrow-label">↓ kernel dispatch</span></div>
+
+            <!-- ─── Kernel ─── -->
+            <div class="kern-wrap">
+                <div class="kern-label">Kernel · Ring 0</div>
+                <div class="kern-cols">
+                    <div class="kcol pr-col">
+                        <div class="kcol-h pr-h">Process</div>
+                        <div class="kbox pr-b">Scheduler · CFS</div>
+                        <div class="kbox pr-b">Task / Process</div>
+                        <div class="kbox pr-b">Signal</div>
+                        <div class="kbox pr-b">ELF loader</div>
+                        <div class="kbox pr-b">PID allocator</div>
+                    </div>
+                    <div class="kcol fs-col">
+                        <div class="kcol-h fs-h">Filesystem</div>
+                        <div class="kbox fs-b">VFS</div>
+                        <div class="kbox fs-b">FAT32</div>
+                        <div class="kbox fs-b">EXT2 / NTFS / Btrfs / ZFS</div>
+                        <div class="kbox fs-b">/proc + /dev</div>
+                        <div class="kbox fs-b">Block cache · LRU</div>
+                    </div>
+                    <div class="kcol nt-col">
+                        <div class="kcol-h nt-h">Network</div>
+                        <div class="kbox nt-b">TCP/IP stack</div>
+                        <div class="kbox nt-b">Socket API (64)</div>
+                        <div class="kbox nt-b">ARP / IP / ICMP</div>
+                        <div class="kbox nt-b">UDP / TCP state machine</div>
+                    </div>
+                    <div class="kcol mm-col">
+                        <div class="kcol-h mm-h">Memory</div>
+                        <div class="kbox mm-b">Physical MM · Buddy</div>
+                        <div class="kbox mm-b">x86 Paging</div>
+                        <div class="kbox mm-b">Heap · kmalloc/kfree</div>
+                        <div class="kbox mm-b">Slab allocator</div>
+                        <div class="kbox mm-b">Virtual memory / mmap</div>
+                    </div>
+                </div>
+
+                <div class="svc-row">
+                    <div class="scol ip-col">
+                        <div class="kcol-h ip-h">IPC</div>
+                        <div class="d3">
+                            <div class="kbox ip-b">Shared memory</div>
+                            <div class="kbox ip-b">Message queues</div>
+                            <div class="kbox ip-b">Pipes</div>
+                        </div>
+                    </div>
+                    <div class="scol sv-col">
+                        <div class="kcol-h sv-h">System services</div>
+                        <div class="d3">
+                            <div class="kbox sv-b">Authentication</div>
+                            <div class="kbox sv-b">TTY · terminal</div>
+                            <div class="kbox sv-b">Init daemon · runlevels</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ─── arrow ─── -->
+            <div class="arrow-row"><span class="arrow-label">↓ hardware abstraction</span></div>
+
+            <!-- ─── Drivers ─── -->
+            <div class="section dr-sec">
+                <div class="sec-label dr-h">Drivers</div>
+                <div class="d2x3">
+                    <span class="pill dr-p">ATA PIO · LBA28/48</span>
+                    <span class="pill dr-p">AHCI · SATA</span>
+                    <span class="pill dr-p">Partition · MBR + GPT</span>
+                    <span class="pill dr-p">PS/2 Keyboard</span>
+                    <span class="pill dr-p">PS/2 Mouse</span>
+                    <span class="pill dr-p">Serial · COM1 · 115200</span>
+                    <span class="pill dr-p">RTL8139 NIC</span>
+                    <span class="pill dr-p">PCI bus enumerate</span>
+                    <span class="pill dr-p">PIT timer · pit_sleep()</span>
+                </div>
+            </div>
+
+            <!-- ─── arrow ─── -->
+            <div class="arrow-row"><span class="arrow-label">↓ arch layer</span></div>
+
+            <!-- ─── Architecture ─── -->
+            <div class="section ar-sec">
+                <div class="sec-label ar-h">Architecture · x86</div>
+                <div class="d2x3">
+                    <span class="pill ar-p">GDT · code / data / TSS</span>
+                    <span class="pill ar-p">IDT · 32 ISR + 16 IRQ</span>
+                    <span class="pill ar-p">ISR / IRQ · PIC 8259</span>
+                    <span class="pill ar-p">Port I/O · inb / outb …</span>
+                    <span class="pill ar-p">CPUID · vendor / features</span>
+                    <span class="pill ar-p">Ring 0 → 3 switch · hw.asm</span>
+                </div>
+            </div>
+
+            <!-- ─── arrow ─── -->
+            <div class="arrow-row"><span class="arrow-label">↓ bare metal</span></div>
+
+            <!-- ─── Hardware ─── -->
+            <div class="section hw-sec">
+                <div class="sec-label hw-h">Hardware</div>
+                <div class="hw-text">CPU i386 · RAM · ATA disk · PIC 8259 · PIT 8253 · PCI bus · RTL8139 NIC · PS/2 · COM1</div>
+            </div>
+
+        </div><!-- /.arch -->
+    </div><!-- /.arch-card -->
+
+</body>
+</html>

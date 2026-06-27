@@ -33,6 +33,23 @@
                     "${workspaceFolder}/kernel/kernel"
                 ]
             }
+        },
+        {
+            "name": "Noctua Userspace (libc)",
+            "includePath": [
+                "${workspaceFolder}/userspace/libc/include"
+            ],
+            "defines": [
+                "__i386__"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu99",
+            "intelliSenseMode": "linux-gcc-x86",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/userspace"
+                ]
+            }
         }
     ],
     "version": 4

@@ -150,6 +150,7 @@ typedef struct mount {
     int      used;
 } mount_t;
 
+int vfs_register_embedded(struct vfs_node *node, const void *data, uint32_t size);
 void vfs_mount(const char *path, const char *device, const char *fs_type);
 int  vfs_umount(const char *path);
 vfs_node_t *vfs_resolve(const char *path);

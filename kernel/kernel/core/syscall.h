@@ -4,6 +4,15 @@
 #include <stdint.h>
 #include "isr.h"
 
+/* User stack constants for execve */
+#define USER_STACK_TOP     0xBFFFFFFC
+#define USER_STACK_BOTTOM  0xBFA00000
+
+/* Internal function to set up user stack and task context for user mode */
+struct task;
+int setup_user_stack(struct task *t, uint32_t entry_point,
+                     char *const argv[], char *const envp[]);
+
 /* Syscall numbers */
 #define SYS_OPEN    1
 #define SYS_READ    2
@@ -56,6 +65,15 @@
 #define SYS_GETPASSWD    49
 #define SYS_USERCOUNT    50
 #define SYS_DEBUG_CON    51
+#define SYS_GETDENTS    52
+#define SYS_IOCTL       53
+#define SYS_ACCESS      54
+#define SYS_TIME        55
+#define SYS_GETTIMEOFDAY 56
+#define SYS_GETCWD      57
+#define SYS_CHMOD       58
+#define SYS_SETUID      59
+#define SYS_SETGID      60
 
 /* File descriptor numbers */
 #define STDIN_FILENO  0
@@ -124,6 +142,15 @@ int      sys_setpasswd(const char *name, const char *newpass);
 int      sys_getpasswd(const char *name, char *buf, uint32_t size);
 int      sys_usercount(void);
 void     sys_debug_con(void);
+int      sys_getdents(int fd, void *buf, uint32_t count);
+int      sys_ioctl(int fd, int cmd, void *arg);
+int      sys_access(const char *path, int mode);
+uint32_t sys_time(uint32_t *tloc);
+int      sys_gettimeofday(void *tv, void *tz);
+int      sys_getcwd(char *buf, uint32_t size);
+int      sys_chmod(const char *path, int mode);
+int      sys_setuid(uint32_t uid);
+int      sys_setgid(uint32_t gid);
 
 #endif
 

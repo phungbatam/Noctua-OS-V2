@@ -3,6 +3,25 @@
 #include "string.h"
 #include "heap.h"
 
+/* Embedded file table for virtual (no-disk) mode */
+#define MAX_EMBEDDED_FILES 16
+typedef struct {
+    vfs_node_t *node;
+    const void *data;
+    uint32_t size;
+} embedded_file_t;
+static embedded_file_t embedded_files[MAX_EMBEDDED_FILES];
+static int embedded_count = 0;
+
+int vfs_register_embedded(vfs_node_t *node, const void *data, uint32_t size) {
+    if (!node || embedded_count >= MAX_EMBEDDED_FILES) return -1;
+    embedded_files[embedded_count].node = node;
+    embedded_files[embedded_count].data = data;
+    embedded_files[embedded_count].size = size;
+    embedded_count++;
+    return 0;
+}
+
 /* Static storage for VFS */
 static vfs_node_t vfs_nodes[MAX_VFS_NODES];
 static int vfs_node_count = 0;
@@ -459,9 +478,23 @@ static int fat_file_close(struct vfs_node *node) {
 }
 
 static int fat_file_read(struct vfs_node *node, uint32_t offset, uint32_t size, void *buffer) {
-    if (!node || !buffer || !bytes_per_cluster) return -1;
+    if (!node || !buffer) return -1;
     if (offset >= node->size) return 0;
     if (offset + size > node->size) size = node->size - offset;
+
+    /* Virtual mode: check embedded files */
+    if (!bytes_per_cluster) {
+        for (int i = 0; i < embedded_count; i++) {
+            if (embedded_files[i].node == node) {
+                uint32_t to_copy = size;
+                if (offset + to_copy > embedded_files[i].size)
+                    to_copy = embedded_files[i].size - offset;
+                memcpy(buffer, (const uint8_t *)embedded_files[i].data + offset, to_copy);
+                return to_copy;
+            }
+        }
+        return 0;
+    }
 
     if (node->first_cluster && size > 0) {
         uint32_t cluster = node->first_cluster;

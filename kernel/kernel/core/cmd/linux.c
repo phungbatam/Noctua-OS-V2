@@ -15,6 +15,8 @@
 #include "heap.h"
 #include "ports.h"
 #include "klog.h"
+#include "arch/cpuid.h"
+#include "mm/page.h"
 
 char cwd[64] = "/";
 
@@ -34,17 +36,50 @@ static int cmd_help_handler(const char *args) {
     scr("  partitions, pci, pciverbose, beep, cmos, dmesg\n");
     scr("  install, partition, format, sys-install, diag\n");
     scr("  ifconfig, ping, netstat, source, gcc, g++\n");
+    scr(" Forensic: strings, fileinfo, memdump, hexedit\n");
+    scr("  dd, sector, diskedit, wipe, recover, binwalk\n");
+    scr("  foremost, testdisk, md5sum, sha1sum, meminfo\n");
+    scr("  registers, syslog, portscan\n");
     scr(" Type 'noctua-help' for 200 Noctua-native commands\n");
     return CMD_RET_OK;
 }
 
 static int cmd_neofetch(const char *args) {
     (void)args;
-    sch(); scr("           ___           \n"); scf();
-    scr("          /   \\          "); scr("Welcome to Noctua OS 1.0\n");
-    scr("         /     \\         "); scr("x86 32-bit Protected Mode\n");
-    scr("        /   {}  \\        "); scr("Custom kernel from scratch\n");
-    scr("       /________\\       \n");
+    char buf[16], cpu_vendor[16], cpu_brand[64];
+    get_cpu_vendor(cpu_vendor);
+    if (cpu_vendor[0] == 0) strcpy(cpu_vendor, "Unknown");
+    get_cpu_brand(cpu_brand);
+
+    uint32_t total_pages = pmem_total_pages();
+    uint32_t total_mb = (total_pages * 4096) / (1024 * 1024);
+    uint32_t free_kb = heap_free();
+
+    uint32_t sec = uptime_get_seconds();
+    int procs = 0;
+    for (int i = 0; ; i++) { task_t *t = task_get(i); if (!t) break; procs++; }
+
+    sch();
+    scr("             .---.            \n");
+    scr("            /  O  \\          "); scf();
+    scr("Welcome to Noctua OS 1.0\n"); sch();
+    scr("           /   ^   \\         "); scf();
+    scr("OS: Noctua OS x86 32-bit\n"); sch();
+    scr("          /   ---   \\        "); scf();
+    scr("Kernel: v1.0 (monolithic)\n"); sch();
+    scr("         /__________\\       "); scf();
+    scr("CPU: "); scr(cpu_vendor); scr("\n"); sch();
+    scr("             |   |            "); scf();
+    scr("Model: "); scr(cpu_brand); scr("\n"); sch();
+    scr("             |   |            "); scf();
+    int2str(total_mb, buf); scr("RAM: "); scr(buf); scr(" MB\n"); sch();
+    scr("             /   \\            "); scf();
+    int2str(free_kb / 1024, buf); scr("Free: "); scr(buf); scr(" MB\n"); sch();
+    scr("            '''''''           "); scf();
+    int2str(sec / 3600, buf); scr(buf); scr("h ");
+    int2str((sec % 3600) / 60, buf); scr(buf); scr("m ");
+    int2str(sec % 60, buf); scr(buf); scr("s");
+    scr(" | Tasks: "); int2str(procs, buf); scr(buf); scr("\n");
     return CMD_RET_OK;
 }
 

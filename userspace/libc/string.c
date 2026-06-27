@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include <stdint.h>
 
 void *memset(void *s, int c, size_t n) {
@@ -102,4 +103,89 @@ char *strstr(const char *haystack, const char *needle) {
         haystack++;
     }
     return NULL;
+}
+
+char *strdup(const char *s) {
+    size_t len = strlen(s) + 1;
+    char *copy = malloc(len);
+    if (copy) memcpy(copy, s, len);
+    return copy;
+}
+
+char *strtok(char *str, const char *delim) {
+    static char *last = NULL;
+    if (str) last = str;
+    if (!last || !*last) return NULL;
+    char *start = last;
+    while (*last) {
+        const char *d = delim;
+        while (*d) { if (*last == *d) break; d++; }
+        if (*d) {
+            *last++ = '\0';
+            return start;
+        }
+        last++;
+    }
+    last = NULL;
+    return start;
+}
+
+size_t strspn(const char *s, const char *accept) {
+    const char *p = s;
+    while (*p) {
+        const char *a = accept;
+        int found = 0;
+        while (*a) { if (*p == *a++) { found = 1; break; } }
+        if (!found) break;
+        p++;
+    }
+    return p - s;
+}
+
+size_t strcspn(const char *s, const char *reject) {
+    const char *p = s;
+    while (*p) {
+        const char *r = reject;
+        while (*r) { if (*p == *r++) return p - s; }
+        p++;
+    }
+    return p - s;
+}
+
+char *strpbrk(const char *s, const char *accept) {
+    while (*s) {
+        const char *a = accept;
+        while (*a) { if (*s == *a++) return (char *)s; }
+        s++;
+    }
+    return NULL;
+}
+
+char *strncat(char *dest, const char *src, size_t n) {
+    char *d = dest;
+    while (*d) d++;
+    while (n-- && *src) *d++ = *src++;
+    *d = '\0';
+    return dest;
+}
+
+char *strerror(int errnum) {
+    (void)errnum;
+    return "Error";
+}
+
+void bzero(void *s, size_t n) {
+    memset(s, 0, n);
+}
+
+int bcmp(const void *s1, const void *s2, size_t n) {
+    return memcmp(s1, s2, n);
+}
+
+char *index(const char *s, int c) {
+    return strchr(s, c);
+}
+
+char *rindex(const char *s, int c) {
+    return strrchr(s, c);
 }

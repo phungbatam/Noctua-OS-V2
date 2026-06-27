@@ -17,5 +17,7 @@ task_t *sched_next(void);
 void sched_add(task_t *t);
 void sched_remove(task_t *t);
 void sched_set_nice(task_t *t, int nice);
+void regs_to_context(struct registers *r, context_t *c);
+void context_to_regs(context_t *c, struct registers *r);
 
 #endif

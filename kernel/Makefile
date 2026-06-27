@@ -95,7 +95,12 @@ OBJS = $(BUILD)/boot.o             \
         $(BUILD)/registry.o        \
         $(BUILD)/linux.o           \
         $(BUILD)/noctua.o          \
-        $(BUILD)/dev.o
+        $(BUILD)/dev.o             \
+        $(BUILD)/tools_forensic.o  \
+        $(BUILD)/tools_editor.o    \
+       $(BUILD)/init_embed.o       \
+       $(BUILD)/sh_embed.o         \
+       $(BUILD)/test_ring3_embed.o
 
 all: $(BUILD)/noctua.bin
 
@@ -175,6 +180,22 @@ $(BUILD)/noctua.o: kernel/core/cmd/noctua.c | $(BUILD)
 
 $(BUILD)/dev.o: kernel/core/cmd/dev.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/tools_forensic.o: kernel/core/cmd/tools_forensic.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/tools_editor.o: kernel/core/cmd/tools_editor.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Embedded userspace binaries
+$(BUILD)/init_embed.o: kernel/embed/init_embed.o
+	cp $< $@
+
+$(BUILD)/sh_embed.o: kernel/embed/sh_embed.o
+	cp $< $@
+
+$(BUILD)/test_ring3_embed.o: kernel/embed/test_ring3_embed.o
+	cp $< $@
 
 # Lib
 $(BUILD)/printk.o: kernel/lib/printk.c | $(BUILD)

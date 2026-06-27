@@ -6,18 +6,30 @@
 #define MAX_TASKS      32
 #define TASK_STACK_SIZE PAGE_SIZE
 #define TASK_NAME_MAX  32
+#define TASK_FD_MAX    32
 
-/* Signal numbers */
-#define SIGKILL   1
+/* Signal numbers (Linux-compatible) */
+#define SIGHUP    1
 #define SIGINT    2
-#define SIGSEGV   3
-#define SIGPIPE   4
-#define SIGTERM   5
-#define NSIG      16
+#define SIGQUIT   3
+#define SIGILL    4
+#define SIGTRAP   5
+#define SIGABRT   6
+#define SIGBUS    7
+#define SIGFPE    8
+#define SIGKILL   9
+#define SIGUSR1   10
+#define SIGSEGV   11
+#define SIGUSR2   12
+#define SIGPIPE   13
+#define SIGALRM   14
+#define SIGTERM   15
+#define SIGCHLD   17
+#define NSIG      32
 
 /* Signal actions */
-#define SIG_DFL ((void *)0)
-#define SIG_IGN ((void *)1)
+#define SIG_DFL ((void (*)(int))0)
+#define SIG_IGN ((void (*)(int))1)
 
 /* Trạng thái task - khác Linux: TVN dùng kiểu đơn giản hơn */
 typedef enum {
@@ -44,8 +56,18 @@ typedef struct {
     uint32_t gs;
 } context_t;
 
-/* Task Control Block - TVN_OS style */
-/* Đơn giản hơn task_struct của Linux rất nhiều */
+/* Per-process file descriptor entry */
+typedef struct {
+    int    is_open;
+    int    is_pipe;
+    int    pipe_id;
+    int    is_pipe_write;
+    void  *vnode;
+    uint32_t pos;
+    int    flags;
+} task_fd_t;
+
+/* Task Control Block - Noctua OS style */
 typedef struct task {
     int id;
     int pid;
@@ -68,6 +90,10 @@ typedef struct task {
     struct task *children;     /* linked list con */
     struct task *sibling;      /* task anh em cung cha */
     struct task *next;
+    task_fd_t fds[TASK_FD_MAX]; /* per-process file descriptor table */
+    uint32_t *pgdir;            /* page directory (0 = use kernel shared) */
+    int uid, euid, gid, egid;   /* POSIX user/group IDs */
+    char cwd[256];               /* per-process current working directory */
 } task_t;
 
 /* Task hiện tại (global, defined in task.c) */

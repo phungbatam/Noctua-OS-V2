@@ -3,18 +3,16 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 
 #define MAX_LINE 256
 
 int main(int argc, char *argv[], char *envp[]) {
     (void)argc; (void)argv; (void)envp;
 
-    puts("Noctua OS init v2.0: starting system...");
-
-    /* Mount devfs and procfs (handled by kernel now) */
+    puts("Noctua OS init v3.0: starting system...");
     puts("init: kernel subsystems initialized");
 
-    /* Try to run /etc/rc script */
     struct stat st;
     if (stat("/etc/rc", &st) == 0) {
         puts("init: running /etc/rc...");
@@ -33,10 +31,31 @@ int main(int argc, char *argv[], char *envp[]) {
         }
     }
 
-    /* Start the shell */
+    if (stat("/bin/login", &st) == 0) {
+        puts("init: starting login manager...");
+        while (1) {
+            pid_t pid = fork();
+            if (pid < 0) {
+                puts("init: fork failed, starting shell directly");
+                break;
+            }
+            if (pid == 0) {
+                char *login_argv[] = { "/bin/login", NULL };
+                char *login_envp[] = { "PATH=/bin:/system", "HOME=/", "SHELL=sh", "TERM=noctua", NULL };
+                execve("/bin/login", login_argv, login_envp);
+                puts("init: login exec failed, starting shell");
+                char *sh_argv[] = { "/bin/sh", NULL };
+                execve("/bin/sh", sh_argv, login_envp);
+                exit(1);
+            }
+            int status;
+            waitpid(pid, &status, 0);
+            puts("init: login exited, restarting...");
+        }
+    }
+
     if (stat("/bin/sh", &st) == 0) {
         puts("init: starting shell on console...");
-
         while (1) {
             pid_t pid = fork();
             if (pid < 0) {
@@ -55,11 +74,11 @@ int main(int argc, char *argv[], char *envp[]) {
             puts("init: shell exited, restarting...");
         }
     } else {
-        puts("init: /bin/sh not found, halting");
+        puts("init: no shell available, halting");
     }
 
     for (;;) {
-        sleep(10000);
+        sleep(10);
     }
     return 0;
 }

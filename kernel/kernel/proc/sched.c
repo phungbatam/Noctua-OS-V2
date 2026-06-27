@@ -1,6 +1,7 @@
 #include "sched.h"
 #include "isr.h"
 #include "string.h"
+#include "arch/gdt.h"
 
 static task_t *ready_queue = 0;
 static int scheduler_active = 0;
@@ -68,7 +69,7 @@ void sched_tick(void) {
     total_ticks++;
 }
 
-static void regs_to_context(struct registers *r, context_t *c) {
+void regs_to_context(struct registers *r, context_t *c) {
     c->eax = r->eax;
     c->ebx = r->ebx;
     c->ecx = r->ecx;
@@ -80,9 +81,16 @@ static void regs_to_context(struct registers *r, context_t *c) {
     c->eip = r->eip;
     c->eflags = r->eflags;
     c->cr3 = 0;
+    c->useresp = r->useresp;
+    c->ss = r->ss;
+    c->cs = r->cs;
+    c->gs = r->gs;
+    c->fs = r->fs;
+    c->es = r->es;
+    c->ds = r->ds;
 }
 
-static void context_to_regs(context_t *c, struct registers *r) {
+void context_to_regs(context_t *c, struct registers *r) {
     r->eax = c->eax;
     r->ebx = c->ebx;
     r->ecx = c->ecx;
@@ -93,6 +101,13 @@ static void context_to_regs(context_t *c, struct registers *r) {
     r->ebp = c->ebp;
     r->eip = c->eip;
     r->eflags = c->eflags;
+    r->useresp = c->useresp;
+    r->ss = c->ss;
+    r->cs = c->cs;
+    r->gs = c->gs;
+    r->fs = c->fs;
+    r->es = c->es;
+    r->ds = c->ds;
 }
 
 void sched_switch(struct registers *r) {
@@ -110,6 +125,9 @@ void sched_switch(struct registers *r) {
     if (!next || next == curr) return;
 
     current_task = next;
+    /* Update TSS stack pointer for ring 3→0 transitions */
+    if (next->kernel_stack)
+        tss_set_stack((uint32_t)next->kernel_stack + next->kernel_stack_size, 0x10);
     context_to_regs(&next->context, r);
 
     if (next->state == TASK_READY) next->state = TASK_RUNNING;

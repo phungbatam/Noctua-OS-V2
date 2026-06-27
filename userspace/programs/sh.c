@@ -124,6 +124,7 @@ static void run_command(char *cmds[], int ncmds, char *envp[]) {
         char *infile = NULL;
         char *outfile = NULL;
         int outappend = 0;
+        (void)outappend;
         int newargc = 0;
         char *newargv[MAX_ARGS];
 

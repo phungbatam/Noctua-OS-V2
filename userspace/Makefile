@@ -20,7 +20,12 @@ LIBC_OBJS = \
     $(LIBC_DIR)/string.o \
     $(LIBC_DIR)/stdio.o \
     $(LIBC_DIR)/stdlib.o \
-    $(LIBC_DIR)/syswait.o
+    $(LIBC_DIR)/syswait.o \
+    $(LIBC_DIR)/dirent.o \
+    $(LIBC_DIR)/ctype.o \
+    $(LIBC_DIR)/errno.o \
+    $(LIBC_DIR)/setjmp.o \
+    $(LIBC_DIR)/libgen.o
 
 LIBC_A = $(LIBC_DIR)/libc.a
 
@@ -35,7 +40,21 @@ PROGRAMS = \
     $(PROG_DIR)/reboot.elf \
     $(PROG_DIR)/rm.elf \
     $(PROG_DIR)/mkdir.elf \
-    $(PROG_DIR)/uname.elf
+    $(PROG_DIR)/uname.elf \
+    $(PROG_DIR)/login.elf \
+    $(PROG_DIR)/useradd.elf \
+    $(PROG_DIR)/passwd.elf \
+    $(PROG_DIR)/id.elf \
+    $(PROG_DIR)/su.elf \
+    $(PROG_DIR)/top.elf \
+    $(PROG_DIR)/dmesg.elf \
+    $(PROG_DIR)/sysinfo.elf \
+    $(PROG_DIR)/free.elf \
+    $(PROG_DIR)/uptime.elf \
+    $(PROG_DIR)/killall.elf \
+    $(PROG_DIR)/ps.elf \
+    $(PROG_DIR)/debug_con.elf \
+    $(PROG_DIR)/test_ring3.elf
 
 all: $(PROGRAMS) install-fs
 

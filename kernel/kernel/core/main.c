@@ -182,67 +182,65 @@ static void cmd_help(void) {
 }
 
 static void cmd_neofetch(void) {
-    char ram_str[16];
+    char ram_str[16], buf[16], cpu_vendor[16], cpu_brand[64];
     int2str(total_ram_kb() / 1024, ram_str);
     get_cpu_vendor(cpu_vendor);
     if (cpu_vendor[0] == 0) memcpy(cpu_vendor, "Unknown", 8);
     get_cpu_brand(cpu_brand);
     
-    /* Clean up CPU brand string - remove trailing spaces */
     int brand_len = strlen(cpu_brand);
     while (brand_len > 0 && cpu_brand[brand_len - 1] == ' ') {
         cpu_brand[brand_len - 1] = 0;
         brand_len--;
     }
-    
+
+    uint32_t sec = uptime_get_seconds();
+    int procs = 0;
+    for (int i = 0; ; i++) { task_t *t = task_get(i); if (!t) break; procs++; }
+
     screen_set_content_color(C_HEADER);
-    screen_term_write("            /\\\n");
-    screen_term_write("           /^^\\          ");
-    screen_set_content_color(C_WIN_TITLE);
-    screen_term_write("-- Noctua OS v1.0 --\n");
-    screen_set_content_color(C_HEADER);
-    screen_term_write("          /    \\         ");
+    screen_term_write("             .---.            \n");
+    screen_term_write("            /  O  \\          ");
     screen_set_content_color(C_INFO);
-    screen_term_write("OS: Noctua OS x86\n");
+    screen_term_write("Welcome to Noctua OS ");
+    screen_term_write("1.0\n");
     screen_set_content_color(C_HEADER);
-    screen_term_write("         /  __  \\        ");
+    screen_term_write("           /   ^   \\         ");
+    screen_set_content_color(C_INFO);
+    screen_term_write("OS: Noctua OS x86 32-bit\n");
+    screen_set_content_color(C_HEADER);
+    screen_term_write("          /   ---   \\        ");
     screen_set_content_color(C_INFO);
     screen_term_write("Kernel: v1.0 (monolithic)\n");
     screen_set_content_color(C_HEADER);
-    screen_term_write("        |  (__) |       ");
+    screen_term_write("         /__________\\       ");
     screen_set_content_color(C_INFO);
-    screen_term_write("CPU Vendor: ");
+    screen_term_write("CPU: ");
     screen_term_write(cpu_vendor);
     screen_term_write("\n");
-    if (cpu_brand[0]) {
-        screen_set_content_color(C_HEADER);
-        screen_term_write("         \\____/         ");
-        screen_set_content_color(C_INFO);
-        screen_term_write("CPU Model: ");
-        screen_term_write(cpu_brand);
-        screen_term_write("\n");
-    } else {
-        screen_set_content_color(C_HEADER);
-        screen_term_write("         \\____/         ");
-        screen_set_content_color(C_INFO);
-        screen_term_write("CPU: ");
-        screen_term_write(cpu_vendor);
-        screen_term_write("\n");
-    }
     screen_set_content_color(C_HEADER);
-    screen_term_write("                          ");
+    screen_term_write("             |   |            ");
+    screen_set_content_color(C_INFO);
+    screen_term_write("Model: ");
+    screen_term_write(cpu_brand);
+    screen_term_write("\n");
+    screen_set_content_color(C_HEADER);
+    screen_term_write("             |   |            ");
     screen_set_content_color(C_INFO);
     screen_term_write("RAM: ");
     screen_term_write(ram_str);
     screen_term_write(" MB\n");
     screen_set_content_color(C_HEADER);
-    screen_term_write("   __________________     ");
+    screen_term_write("             /   \\            ");
     screen_set_content_color(C_INFO);
-    screen_term_write("Display: VGA 640x400 framebuffer\n");
+    int2str(heap_free() / 1024, buf); screen_term_write("Free: "); screen_term_write(buf); screen_term_write(" MB\n");
     screen_set_content_color(C_HEADER);
-    screen_term_write("                          ");
+    screen_term_write("            '''''''           ");
     screen_set_content_color(C_INFO);
-    screen_term_write("Shell: built-in CLI\n");
+    int2str(sec / 3600, buf); screen_term_write(buf); screen_term_write("h ");
+    int2str((sec % 3600) / 60, buf); screen_term_write(buf); screen_term_write("m ");
+    int2str(sec % 60, buf); screen_term_write(buf); screen_term_write("s");
+    screen_term_write(" | Tasks: "); int2str(procs, buf); screen_term_write(buf); screen_term_write("\n");
 }
 
 static void cmd_info(void) {
@@ -1863,6 +1861,8 @@ void kmain(unsigned int mb_info) {
     cmd_linux_init();
     cmd_noctua_init();
     cmd_dev_init();
+    cmd_tools_init();
+    cmd_editor_init();
     init_waitqueue_head(&test_wq);
     INIT_LIST_HEAD(&system_wq.head);
     system_wq.running = 1;

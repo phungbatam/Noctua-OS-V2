@@ -23,7 +23,12 @@ pid_t getpid(void) {
 
 void exit(int status) {
     syscall(SYS_EXIT, (long)status, 0, 0);
-    for (;;);
+    __builtin_unreachable();
+}
+
+void _exit(int status) {
+    syscall(SYS_EXIT, (long)status, 0, 0);
+    __builtin_unreachable();
 }
 
 void *sbrk(intptr_t increment) {
@@ -82,6 +87,10 @@ int mkdir(const char *path) {
     return (int)syscall(SYS_MKDIR, (long)path, 0, 0);
 }
 
+int wait(int *status) {
+    return (int)syscall(SYS_WAITPID, (long)-1, (long)status, 0);
+}
+
 int rmdir(const char *path) {
     return (int)syscall(SYS_RMDIR, (long)path, 0, 0);
 }
@@ -92,4 +101,100 @@ int uname(void *buf) {
 
 int unlink(const char *path) {
     return (int)syscall(SYS_UNLINK, (long)path, 0, 0);
+}
+
+int auth_login(const char *user, const char *pass) {
+    return (int)syscall(SYS_AUTH_LOGIN, (long)user, (long)pass, 0);
+}
+
+unsigned int getuid(void) {
+    return (unsigned int)syscall(SYS_GETUID, 0, 0, 0);
+}
+
+unsigned int getgid(void) {
+    return (unsigned int)syscall(SYS_GETGID, 0, 0, 0);
+}
+
+unsigned int geteuid(void) {
+    return (unsigned int)syscall(SYS_GETEUID, 0, 0, 0);
+}
+
+unsigned int getegid(void) {
+    return (unsigned int)syscall(SYS_GETEGID, 0, 0, 0);
+}
+
+int getusername(char *buf, unsigned int size) {
+    return (int)syscall(SYS_GETUSERNAME, (long)buf, (long)size, 0);
+}
+
+int useradd(const char *name, const char *pass, unsigned int uid, unsigned int gid) {
+    (void)gid;
+    return (int)syscall(SYS_USERADD, (long)name, (long)pass, (long)uid);
+}
+
+int userdel(const char *name) {
+    return (int)syscall(SYS_USERDEL, (long)name, 0, 0);
+}
+
+int setpasswd(const char *name, const char *newpass) {
+    return (int)syscall(SYS_SETPASSWD, (long)name, (long)newpass, 0);
+}
+
+int getpasswd(const char *name, char *buf, unsigned int size) {
+    return (int)syscall(SYS_GETPASSWD, (long)name, (long)buf, (long)size);
+}
+
+int usercount(void) {
+    return (int)syscall(SYS_USERCOUNT, 0, 0, 0);
+}
+
+void debug_con(void) {
+    syscall(SYS_DEBUG_CON, 0, 0, 0);
+}
+
+int getdents(int fd, void *buf, unsigned int count) {
+    return (int)syscall(SYS_GETDENTS, (long)fd, (long)buf, (long)count);
+}
+
+int ioctl(int fd, int cmd, void *arg) {
+    return (int)syscall(SYS_IOCTL, (long)fd, (long)cmd, (long)arg);
+}
+
+int access(const char *path, int mode) {
+    return (int)syscall(SYS_ACCESS, (long)path, (long)mode, 0);
+}
+
+unsigned int time(unsigned int *tloc) {
+    return (unsigned int)syscall(SYS_TIME, (long)tloc, 0, 0);
+}
+
+int gettimeofday(struct timeval *tv, struct timezone *tz) {
+    return (int)syscall(SYS_GETTIMEOFDAY, (long)tv, (long)tz, 0);
+}
+
+char *getcwd(char *buf, unsigned int size) {
+    int ret = (int)syscall(SYS_GETCWD, (long)buf, (long)size, 0);
+    if (ret < 0) return 0;
+    return buf;
+}
+
+int chmod(const char *path, int mode) {
+    return (int)syscall(SYS_CHMOD, (long)path, (long)mode, 0);
+}
+
+int setuid(unsigned int uid) {
+    return (int)syscall(SYS_SETUID, (long)uid, 0, 0);
+}
+
+int setgid(unsigned int gid) {
+    return (int)syscall(SYS_SETGID, (long)gid, 0, 0);
+}
+
+int fsync(int fd) {
+    (void)fd;
+    return 0;
+}
+
+int sync(void) {
+    return 0;
 }
