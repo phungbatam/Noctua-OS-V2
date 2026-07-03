@@ -69,6 +69,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "serial.h"
+#include "emu/monitor.h"
 
 /* ============================================
    Filesystem
@@ -160,6 +161,11 @@ static int is_root = 0;
 
 void tools_ntua_init(void);
 void setup_init(void);
+/* GRUB bootloader embedded binaries (linked from usr/lib/grub/) */
+extern char _binary__usr_lib_grub_i386_pc_boot_img_start[];
+extern char _binary__usr_lib_grub_i386_pc_boot_img_end[];
+extern char _binary_build_grub_core_img_start[];
+extern char _binary_build_grub_core_img_end[];
 
 static unsigned int total_mem_upper = 0;
 static unsigned int total_mem_lower = 0;
@@ -184,7 +190,67 @@ static void cmd_help(void) {
     screen_set_content_color(C_HEADER);
     screen_term_write("=== Noctua OS v1.0 Commands ===\n");
     screen_set_content_color(C_INFO);
-    screen_term_write(" help        - this help\n clear       - clear terminal\n echo        - echo text\n neofetch    - system info (CPU,RAM,OS)\n info        - quick system info\n banner      - show banner\n calc        - simple calculator\n ls          - list directory\n cd          - change directory\n cat         - view file\n mkdir       - create directory\n touch       - create file\n pwd         - print working directory\n whoami      - show current user\n hostname    - show hostname\n uptime      - system uptime\n free        - memory usage\n ps          - process list\n kill        - kill process\n history     - command history\n env         - environment variables\n export      - set environment var\n dmesg       - kernel log messages\n about       - about Noctua OS\n color       - set text color\n cow         - cow says moo\n date        - show build date\n creds       - credits\n explore     - virtual file browser\n edit        - text editor (F1:save F2:quit)\n grep        - search text in file\n find        - list all files\n more        - view file page by page\n hexdump     - hex view of file\n ifconfig    - network interface\n ping        - ICMP echo (ping <ip>)\n netstat     - socket connections\n source      - run script file\n reboot      - restart\n shutdown    - power off\n diskinfo    - ATA drive info (GB, model, LBA)\n partitions  - partition table\n pci         - PCI devices\n pciverbose  - PCI devices (detailed)\n beep        - play beep sound\n cmos        - CMOS/RTC info\n diag        - system diagnostics\n install     - OS installer guide\n partition   - list disk partitions\n format      - format partition\n sys-install - install system files\n pgup/pgdn   - scroll terminal\n");
+    static const char * const cmds[] = {
+        " help        - this help",
+        " clear       - clear terminal",
+        " echo        - echo text",
+        " neofetch    - system info (CPU,RAM,OS)",
+        " info        - quick system info",
+        " banner      - show banner",
+        " calc        - simple calculator",
+        " ls          - list directory",
+        " cd          - change directory",
+        " cat         - view file",
+        " mkdir       - create directory",
+        " touch       - create file",
+        " pwd         - print working directory",
+        " whoami      - show current user",
+        " hostname    - show hostname",
+        " uptime      - system uptime",
+        " free        - memory usage",
+        " ps          - process list",
+        " kill        - kill process",
+        " history     - command history",
+        " env         - environment variables",
+        " export      - set environment var",
+        " dmesg       - kernel log messages",
+        " about       - about Noctua OS",
+        " color       - set text color",
+        " cow         - cow says moo",
+        " date        - show build date",
+        " creds       - credits",
+        " explore     - virtual file browser",
+        " edit        - text editor (F1:save F2:quit)",
+        " grep        - search text in file",
+        " find        - list all files",
+        " more        - view file page by page",
+        " hexdump     - hex view of file",
+        " ifconfig    - network interface",
+        " ping        - ICMP echo (ping <ip>)",
+        " netstat     - socket connections",
+        " source      - run script file",
+        " reboot      - restart",
+        " shutdown    - power off",
+        " diskinfo    - Disk & partition info (drives, size, LBA, format status)",
+        " partitions  - partition table",
+        " pci         - PCI devices",
+        " pciverbose  - PCI devices (detailed)",
+        " beep        - play beep sound",
+        " cmos        - CMOS/RTC info",
+        " diag        - system diagnostics",
+        " install     - OS installer guide",
+        " partition   - list disk partitions",
+        " format      - format partition",
+        " sys-install - install system files",
+        " pgup/pgdn   - scroll terminal",
+        " vm          - CPU emulator",
+        " setup       - interactive installer",
+        0
+    };
+    for (int i = 0; cmds[i]; i++) {
+        screen_term_write(cmds[i]);
+        screen_term_write("\n");
+    }
 }
 
 static void cmd_neofetch(void) {
@@ -470,6 +536,55 @@ static void cmd_diskinfo(void) {
         screen_term_write(dev->is_atapi ? "ATAPI" : "ATA");
         screen_term_write("\n");
     }
+
+    screen_term_write("\n");
+    screen_set_content_color(C_HEADER);
+    screen_term_write("=== Partitions ===\n");
+    screen_set_content_color(C_INFO);
+
+    int np = partition_get_count();
+    if (np == 0) {
+        screen_term_write("No partitions found\n");
+        screen_term_write("Use 'sys-install' to create and install to a new partition.\n");
+        return;
+    }
+
+    for (int i = 0; i < np; i++) {
+        partition_info_t *p = partition_get(i);
+        if (!p || !p->present) continue;
+
+        char buf[32];
+        screen_term_write(" /dev/sda");
+        int2str(p->partition_number, buf);
+        screen_term_write(buf);
+        screen_term_write("  ");
+        screen_term_write(p->label);
+        screen_term_write(p->bootable ? " [BOOT]" : "");
+        screen_term_write("\n");
+
+        uint64_t mbs = p->size_bytes / (1024 * 1024);
+        screen_term_write("      Size: ");
+        if (mbs >= 1024) {
+            int2str((int)(mbs / 1024), buf);
+            screen_term_write(buf);
+            screen_term_write(" GB (");
+            int2str((int)mbs, buf);
+            screen_term_write(buf);
+            screen_term_write(" MB)\n");
+        } else {
+            int2str((int)mbs, buf);
+            screen_term_write(buf);
+            screen_term_write(" MB\n");
+        }
+
+        screen_term_write("      LBA:  ");
+        int2str((int)(p->lba_start & 0xFFFFFFFF), buf);
+        screen_term_write(buf);
+        screen_term_write(" + ");
+        int2str((int)(p->sector_count & 0xFFFFFFFF), buf);
+        screen_term_write(buf);
+        screen_term_write(" sectors\n");
+    }
 }
 
 static void cmd_partitions(void) {
@@ -666,38 +781,16 @@ static void cmd_dmesg(void) {
     klog_dump();
 }
 
+static void cmd_sys_install(const char *arg);
+
 static void cmd_install(void) {
     screen_set_content_color(C_HEADER);
     screen_term_write("=== Noctua OS Installer ===\n");
     screen_set_content_color(C_INFO);
-    screen_term_write(" Welcome to the Noctua OS installer!\n\n");
 
-    screen_term_write(" This will guide you through:\n");
-    screen_term_write("  1. Partition a disk\n");
-    screen_term_write("  2. Format partitions\n");
-    screen_term_write("  3. Install system files\n\n");
-
-    screen_term_write(" Available disks:\n");
-    int nd = ata_device_count();
-    if (nd == 0) {
-        screen_set_content_color(C_ERROR);
-        screen_term_write(" No ATA drives detected\n");
-        screen_set_content_color(C_INFO);
-    } else {
-        for (int i = 0; i < nd; i++) {
-            ata_device_t *dev = ata_get_device(i);
-            if (!dev || !dev->present) continue;
-            char buf[64];
-            screen_term_write("  /dev/sda -> ");
-            screen_term_write(dev->model);
-            snprintf(buf, sizeof(buf), " (%d MB)", (int)(dev->total_sectors * dev->sector_size / (1024*1024)));
-            screen_term_write(buf);
-            screen_term_write("\n");
-        }
-    }
-
-    screen_term_write("\n Use 'partition', 'format', and 'sys-install' commands\n");
-    screen_term_write(" for manual installation steps.\n");
+    /* Delegate to sys-install for the first partition */
+    screen_term_write(" Running full system installation...\n\n");
+    cmd_sys_install("1");
 }
 
 static void cmd_partition_disk(const char *arg) {
@@ -808,54 +901,103 @@ static void cmd_format_disk(const char *arg) {
     screen_term_write(" Use 'sys-install' to install system files.\n");
 }
 
+static int sys_install_write_mbr(ata_device_t *disk, uint32_t lba_start, uint32_t sector_count) {
+    uint8_t mbr[512];
+    memcpy(mbr, _binary__usr_lib_grub_i386_pc_boot_img_start, 440);
+    memset(mbr + 440, 0, 72);
+    mbr_entry_t *p1 = (mbr_entry_t *)(mbr + 446);
+    p1->status = 0x80;
+    memset(p1->chs_first, 0, 3);
+    p1->type = PART_TYPE_FAT32_LBA;
+    memset(p1->chs_last, 0xFF, 3);
+    p1->lba_start = lba_start;
+    p1->sector_count = sector_count;
+    memset(mbr + 462, 0, 48);
+    mbr[510] = 0x55;
+    mbr[511] = 0xAA;
+    return ata_write_sectors(disk, 0, 1, mbr);
+}
+
+static int sys_install_grub(ata_device_t *disk) {
+    uint32_t core_size = (uint32_t)(_binary_build_grub_core_img_end - _binary_build_grub_core_img_start);
+    uint32_t remaining = core_size;
+    uint8_t *ptr = (uint8_t *)_binary_build_grub_core_img_start;
+    uint32_t lba = 1;
+    while (remaining > 0) {
+        uint8_t sector[512];
+        uint32_t chunk = (remaining < 512) ? remaining : 512;
+        memcpy(sector, ptr, chunk);
+        if (chunk < 512) memset(sector + chunk, 0, 512 - chunk);
+        if (ata_write_sectors(disk, lba, 1, sector) != 0) return -1;
+        lba++;
+        ptr += 512;
+        remaining -= chunk;
+    }
+    return 0;
+}
+
 static void cmd_sys_install(const char *arg) {
+    (void)arg;
     screen_set_content_color(C_HEADER);
     screen_term_write("=== System Installation ===\n");
     screen_set_content_color(C_INFO);
 
-    int part = 1;
-    if (arg && arg[0]) {
-        part = 0; int i = 0;
-        while (arg[i] >= '0' && arg[i] <= '9') {
-            part = part * 10 + (arg[i] - '0');
-            i++;
-        }
-    }
-
-    if (partition_get_count() == 0) {
-        screen_term_write(" No partitions found. Use 'diskinfo' first.\n");
+    int nd = ata_device_count();
+    if (nd == 0) {
+        screen_set_content_color(C_ERROR);
+        screen_term_write(" No ATA drives detected!\n");
+        screen_set_content_color(C_INFO);
         return;
     }
 
-    int pidx = -1;
-    for (int p = 0; p < partition_get_count(); p++) {
-        partition_info_t *pi = partition_get(p);
-        if (pi && pi->present && pi->partition_number == part) {
-            pidx = p; break;
-        }
+    ata_device_t *disk = 0;
+    int disk_idx = 0;
+    for (int i = 0; i < nd; i++) {
+        ata_device_t *d = ata_get_device(i);
+        if (d && d->present) { disk = d; disk_idx = i; break; }
     }
-    if (pidx < 0) {
-        screen_term_write(" Partition ");
-        char buf[8]; int2str(part, buf);
-        screen_term_write(buf);
-        screen_term_write(" not found.\n");
+    if (!disk) {
+        screen_term_write(" No available ATA drive found.\n");
         return;
     }
 
-    partition_info_t *pi = partition_get(pidx);
-    char buf[8];
-    screen_term_write(" Installing to partition ");
-    int2str(part, buf);
-    screen_term_write(buf);
+    char buf[64];
+    screen_term_write(" Target: ");
+    screen_set_content_color(C_HEADER);
+    screen_term_write(disk->model);
+    screen_set_content_color(C_INFO);
+    uint64_t mb = (disk->total_sectors * disk->sector_size) / (1024*1024);
+    int2str((int)mb, buf);
     screen_term_write(" (");
-    int2str((int)(pi->size_bytes / (1024 * 1024)), buf);
     screen_term_write(buf);
-    screen_term_write(" MB)...\n\n");
+    screen_term_write(" MB)\n\n");
 
-    /* Register block device for the partition */
-    int bd = blockdev_register(pi->drive_id, pi->lba_start, pi->sector_count);
+    uint32_t first_lba = 2048;
+    uint32_t total_sects = (uint32_t)disk->total_sectors;
+    if (total_sects > 0xFFFFFFF0) total_sects = 0xFFFFFFF0;
+    if (total_sects <= first_lba) {
+        screen_term_write(" FAILED: Disk too small.\n");
+        return;
+    }
+    uint32_t part_sectors = total_sects - first_lba;
+
+    int2str((int)(part_sectors / 2048), buf);
+    screen_term_write(" Partition size: ");
+    screen_term_write(buf);
+    screen_term_write(" MB\n\n");
+
+    screen_term_write(" Writing MBR + partition table...\n");
+    if (sys_install_write_mbr(disk, first_lba, part_sectors) != 0) {
+        screen_term_write(" FAILED: MBR write error.\n");
+        return;
+    }
+
+    partition_init();
+
+    screen_term_write(" Registering block device...\n");
+    int bd = blockdev_register(disk_idx, first_lba, part_sectors);
     if (bd < 0) {
-        screen_term_write(" FAILED: Could not access partition.\n");
+        screen_term_write(" FAILED: Cannot register block device.\n");
         return;
     }
     block_dev_t *bdev = blockdev_get(bd);
@@ -864,47 +1006,53 @@ static void cmd_sys_install(const char *arg) {
         return;
     }
 
-    /* Ensure partition is formatted */
-    uint8_t test_buf[512];
-    if (bdev->read(bdev->priv, 0, test_buf, 1) < 0) {
-        screen_term_write(" FAILED: Cannot read partition.\n");
+    screen_term_write(" Formatting FAT32...\n");
+    if (fat32_format(bdev) < 0) {
+        screen_term_write(" FAILED: Format error.\n");
         return;
     }
-    uint16_t *sig = (uint16_t *)(test_buf + 510);
-    if (*sig != 0xAA55) {
-        screen_term_write(" Partition not formatted. Run 'format ");
-        int2str(part, buf);
-        screen_term_write(buf);
-        screen_term_write("' first.\n");
-        return;
-    }
+    screen_term_write(" [OK] Formatted\n");
 
-    screen_term_write(" Creating directories...\n");
+    screen_term_write(" Installing GRUB bootloader...\n");
+    if (sys_install_grub(disk) != 0) {
+        screen_term_write(" FAILED: GRUB install error.\n");
+        return;
+    }
+    screen_term_write(" [OK] GRUB installed\n");
+
+    screen_term_write(" Creating system directories...\n");
     const char *dirs[] = {"boot", "bin", "etc", "home", "usr", "var", "tmp", "dev", "proc", 0};
     for (int i = 0; dirs[i]; i++) {
-        if (fat32_mkdir(bdev, dirs[i]) < 0) {
-            screen_term_write("  FAILED: ");
-            screen_term_write(dirs[i]);
-            screen_term_write("\n");
-        } else {
+        if (fat32_mkdir(bdev, dirs[i]) < 0)
+            screen_term_write("  FAILED: /");
+        else
             screen_term_write("  /");
-            screen_term_write(dirs[i]);
-            screen_term_write("\n");
-        }
+        screen_term_write(dirs[i]);
+        screen_term_write("\n");
     }
 
-    screen_term_write("\n Writing system files...\n");
+    fat32_mkdir(bdev, "boot/grub");
+    fat32_write_file(bdev, "boot/grub/grub.cfg",
+        "set timeout=5\n"
+        "set default=0\n"
+        "menuentry \"Noctua OS\" {\n"
+        "    multiboot /boot/noctua.bin\n"
+        "    boot\n"
+        "}\n");
+
+    screen_term_write(" Writing system files...\n");
     fat32_write_file(bdev, "VERSION", "Noctua OS v1.0\n");
     screen_term_write("  /VERSION\n");
-    fat32_write_file(bdev, "README.TXT", "Chao mung ban den voi Noctua OS!\n");
+    fat32_write_file(bdev, "README.TXT", "Welcome to Noctua OS!\n");
     screen_term_write("  /README.TXT\n");
-    fat32_write_file(bdev, "hostname", "noctua\n");
+    fat32_write_file(bdev, "etc/hostname", "noctua\n");
     screen_term_write("  /etc/hostname\n");
 
     screen_set_content_color(C_WIN_TEXT);
     screen_term_write("\n [  OK  ] Installation complete!\n");
     screen_set_content_color(C_INFO);
-    screen_term_write(" Reboot to use the new system.\n");
+    screen_term_write(" Copy noctua.bin to the partition's /boot/ directory,\n");
+    screen_term_write(" then reboot.\n");
 }
 
 static void cmd_diag(void) {
@@ -1878,6 +2026,10 @@ void kmain(unsigned int mb_info) {
     schedule_work(&system_wq, &wq_test_work);
     workqueue_thread();
 
+    pci_init();
+    boot_print("PCI ", "PCI bus enumeration...");
+    boot_ok();
+
     ata_init();
     boot_print("ATA ", "ATA driver...");
     boot_ok();
@@ -1984,6 +2136,14 @@ void kmain(unsigned int mb_info) {
     while (delay < 30000000) delay++;
 
     screen_init(mb_info);
+
+    /* Boot the Machine Code Monitor */
+    static monitor_t mon;
+    monitor_init(&mon);
+    monitor_loop(&mon);
+
+    /* If monitor returns (user typed 'shell'), fall back to classic shell */
+    screen_init(mb_info);
     screen_set_content_color(C_WIN_TITLE);
     screen_term_write("\n Noctua OS v1.0 - Kernel Console\n");
     screen_set_content_color(C_INFO);
@@ -2063,7 +2223,6 @@ void kmain(unsigned int mb_info) {
         }
 
         if (k == K_UP) {
-            /* History up */
             if (hist_count > 0) {
                 if (hist_idx < hist_count) hist_idx++;
                 int hidx = (hist_pos - hist_idx + HIST_SIZE) % HIST_SIZE;
@@ -2077,7 +2236,6 @@ void kmain(unsigned int mb_info) {
         }
 
         if (k == K_DOWN) {
-            /* History down or empty */
             if (hist_idx > 0) {
                 hist_idx--;
                 if (hist_idx > 0) {

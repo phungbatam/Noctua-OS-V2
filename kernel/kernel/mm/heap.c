@@ -1,5 +1,6 @@
 #include "heap.h"
 #include "string.h"
+#include "screen.h"
 
 static heap_block_t *heap_first = 0;
 static uint32_t heap_total = 0;
@@ -24,7 +25,17 @@ void *kmalloc(uint32_t size) {
 
     heap_block_t *curr = heap_first;
     while (curr) {
-        if (curr->magic != HEAP_MAGIC) return 0;
+        if (curr->magic != HEAP_MAGIC) {
+            char hdbg[32];
+            screen_term_write("[HEAP] bad magic at ");
+            int2str_hex((uint32_t)curr, hdbg);
+            screen_term_write(hdbg);
+            screen_term_write(" magic=");
+            int2str_hex(curr->magic, hdbg);
+            screen_term_write(hdbg);
+            screen_term_write("\n");
+            return 0;
+        }
         if (curr->free && curr->size >= size) {
             /* Split if large enough */
             if (curr->size > size + sizeof(heap_block_t) + 4) {
@@ -50,7 +61,14 @@ void *kmalloc(uint32_t size) {
 void kfree(void *ptr) {
     if (!ptr) return;
     heap_block_t *block = (heap_block_t *)ptr - 1;
-    if (block->magic != HEAP_MAGIC) return;
+    if (block->magic != HEAP_MAGIC) {
+        char hdbg[32];
+        screen_term_write("[HEAP] kfree bad magic at ");
+        int2str_hex((uint32_t)block, hdbg);
+        screen_term_write(hdbg);
+        screen_term_write("\n");
+        return;
+    }
 
     block->free = 1;
     heap_used_bytes -= block->size;

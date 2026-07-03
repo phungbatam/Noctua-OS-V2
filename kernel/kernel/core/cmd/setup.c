@@ -8,6 +8,7 @@
 #include "drivers/input/keyboard.h"
 #include "char/serial.h"
 #include "ports.h"
+#include "heap.h"
 #define SETUP_MAX_INPUT 128
 #define SECTORS_PER_MB   2048
 
@@ -326,7 +327,8 @@ static int cmd_setup_handler(const char *args) {
     }
 
     print_progress("Formatting FAT32 filesystem...");
-    if (fat32_format(bdev) != 0) {
+    int fmt_ret = fat32_format(bdev);
+    if (fmt_ret != 0) {
         sce(); scr(" Format failed!\n"); scf();
         wait_key();
         return CMD_RET_OK;
@@ -363,7 +365,7 @@ static int cmd_setup_handler(const char *args) {
 
 void setup_init(void) {
     static command_t cmds[] = {
-        CMD_FLAG("setup",    cmd_setup_handler, "Interactive system installer", "setup", CMD_CAT_SYSTEM, "1.0"),
+        CMD_FLAG("setup",    cmd_setup_handler, "Interactive system installer - partitions, formats, installs GRUB + system files to disk", "setup", CMD_CAT_SYSTEM, "1.0"),
         {0,0,0,0,0,0,0},
     };
     for (int i = 0; cmds[i].name; i++) cmd_register(&cmds[i]);

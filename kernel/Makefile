@@ -6,7 +6,8 @@ INC  = -Ikernel -Ikernel/core -Ikernel/ui -Ikernel/arch -Ikernel/lib \
        -Ikernel/fs -Ikernel/mm -Ikernel/proc -Ikernel/net \
        -Ikernel/drivers -Ikernel/drivers/block -Ikernel/drivers/bus \
        -Ikernel/drivers/char -Ikernel/drivers/input -Ikernel/drivers/net \
-       -Ikernel/drivers/timer -Ikernel/drivers/block -Ikernel/ipc
+       -Ikernel/drivers/timer -Ikernel/drivers/block -Ikernel/ipc \
+       -Ikernel/emu
 CFLAGS = -std=gnu99 -ffreestanding -m32 -O2 -Wall -Wextra -nostdlib \
          -fno-stack-protector -mno-sse -mno-mmx -mno-sse2 -mno-3dnow $(INC)
 LDFLAGS = -m elf_i386 -T link.ld -nostdlib
@@ -104,8 +105,10 @@ OBJS = $(BUILD)/boot.o             \
         $(BUILD)/grub_boot.o       \
         $(BUILD)/grub_core.o       \
         $(BUILD)/init_embed.o       \
-       $(BUILD)/sh_embed.o         \
-       $(BUILD)/test_ring3_embed.o
+        $(BUILD)/sh_embed.o         \
+        $(BUILD)/test_ring3_embed.o \
+        $(BUILD)/cpu.o                \
+        $(BUILD)/monitor.o
 
 all: $(BUILD)/noctua.bin
 
@@ -196,6 +199,13 @@ $(BUILD)/tools_ntua.o: kernel/core/cmd/tools_ntua.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/setup.o: kernel/core/cmd/setup.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Emulator
+$(BUILD)/cpu.o: kernel/emu/cpu.c | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/monitor.o: kernel/emu/monitor.c | $(BUILD)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # GRUB boot image for disk installation

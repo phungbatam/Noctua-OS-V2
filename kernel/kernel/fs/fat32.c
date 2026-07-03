@@ -2,6 +2,7 @@
 #include "blockdev.h"
 #include "string.h"
 #include "heap.h"
+#include "screen.h"
 
 /* Embedded file table for virtual (no-disk) mode */
 #define MAX_EMBEDDED_FILES 16
@@ -650,10 +651,11 @@ void dentry_add(vfs_node_t *parent, vfs_node_t *child) {
 
 /* Format a block device as FAT32 */
 int fat32_format(struct block_dev *bdev) {
-    if (!bdev || !bdev->write) return -1;
+    char dbg[32];
+    if (!bdev || !bdev->write) { screen_term_write(" FMT:bdev bad\n"); return -1; }
 
     uint32_t total_sectors = (uint32_t)bdev->total_sectors;
-    if (total_sectors < 1000) return -1;
+    if (total_sectors < 1000) { screen_term_write(" FMT:too small="); int2str((int)total_sectors, dbg); screen_term_write(dbg); screen_term_write("\n"); return -1; }
 
     uint16_t bps = 512;
     uint8_t spc = 1;
@@ -716,7 +718,7 @@ int fat32_format(struct block_dev *bdev) {
     boot[511] = 0xAA;
 
     /* Write boot sector */
-    if (bdev->write(bdev->priv, 0, boot, 1) < 0) return -1;
+    if (bdev->write(bdev->priv, 0, boot, 1) < 0) { screen_term_write(" FMT:write0 fail\n"); return -1; }
 
     /* Write FSInfo sector */
     uint8_t fsinfo[512];
@@ -726,16 +728,16 @@ int fat32_format(struct block_dev *bdev) {
     *(uint32_t *)(fsinfo + 488) = 0xFFFFFFFF;
     *(uint32_t *)(fsinfo + 492) = 0xFFFFFFFF;
     *(uint32_t *)(fsinfo + 508) = 0xAA550000;
-    if (bdev->write(bdev->priv, 1, fsinfo, 1) < 0) return -1;
+    if (bdev->write(bdev->priv, 1, fsinfo, 1) < 0) { screen_term_write(" FMT:write1 fail\n"); return -1; }
 
     /* Write backup boot sector + backup FSInfo */
-    if (bdev->write(bdev->priv, 6, boot, 1) < 0) return -1;
-    if (bdev->write(bdev->priv, 7, fsinfo, 1) < 0) return -1;
+    if (bdev->write(bdev->priv, 6, boot, 1) < 0) { screen_term_write(" FMT:write6 fail\n"); return -1; }
+    if (bdev->write(bdev->priv, 7, fsinfo, 1) < 0) { screen_term_write(" FMT:write7 fail\n"); return -1; }
 
     /* Build and write FAT tables */
     uint32_t fat_bytes = fat_sectors * 512;
     uint8_t *fat = (uint8_t *)kmalloc(fat_bytes);
-    if (!fat) return -1;
+    if (!fat) { screen_term_write(" FMT:kmalloc fat fail\n"); return -1; }
     memset(fat, 0, fat_bytes);
 
     /* Cluster 0: media ID byte */
@@ -756,12 +758,12 @@ int fat32_format(struct block_dev *bdev) {
 
     /* Write FAT1 */
     if (bdev->write(bdev->priv, reserved, fat, fat_sectors) < 0) {
-        kfree(fat);
+        screen_term_write(" FMT:writeFAT1 fail\n"); kfree(fat);
         return -1;
     }
     /* Write FAT2 */
     if (bdev->write(bdev->priv, reserved + fat_sectors, fat, fat_sectors) < 0) {
-        kfree(fat);
+        screen_term_write(" FMT:writeFAT2 fail\n"); kfree(fat);
         return -1;
     }
     kfree(fat);
@@ -769,7 +771,7 @@ int fat32_format(struct block_dev *bdev) {
     /* Write root directory cluster (cluster 2) */
     uint32_t root_lba = reserved + num_fats * fat_sectors + (2 - 2) * spc;
     uint8_t *root_dir = (uint8_t *)kmalloc(spc * 512);
-    if (!root_dir) return -1;
+    if (!root_dir) { screen_term_write(" FMT:kmalloc root fail\n"); return -1; }
     memset(root_dir, 0, spc * 512);
 
     /* Volume label entry */
@@ -780,7 +782,7 @@ int fat32_format(struct block_dev *bdev) {
     vol->write_time = 0x0000;
 
     if (bdev->write(bdev->priv, root_lba, root_dir, spc) < 0) {
-        kfree(root_dir);
+        screen_term_write(" FMT:write root fail\n"); kfree(root_dir);
         return -1;
     }
     kfree(root_dir);
